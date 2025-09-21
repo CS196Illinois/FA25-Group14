@@ -1,1 +1,19 @@
 .DS_Store
+# Python
+*.pyc
+__pycache__/
+.Python/
+venv/
+.venv/
+env/
+.env
+instance/
+
+# Editor/OS specific files
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Logs and temporary files
+*.log
+tmp/
