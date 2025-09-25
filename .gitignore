@@ -17,3 +17,5 @@ instance/
 # Logs and temporary files
 *.log
 tmp/
+
+experiments/
