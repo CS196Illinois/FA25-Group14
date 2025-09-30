@@ -1,0 +1,137 @@
+{% extends "base.html" %} {% block title %}Review {{ course.course_code }}{%
+endblock %} {% block content %}
+<div class="review-container">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/">Course Compass</a></li>
+      <li><a href="/#courses">Course Explorer</a></li>
+      <li>
+        <a href="/course/{{ course.course_code }}">{{ course.course_code }}</a>
+      </li>
+      <li aria-current="page">Write Review</li>
+    </ol>
+  </nav>
+
+  <div class="review-form-container">
+    <header class="review-form-header">
+      <h1>Review {{ course.course_code }}</h1>
+      <h2>{{ course.course_name }}</h2>
+      <p>
+        Share your experience to help other students make informed decisions
+      </p>
+    </header>
+
+    <form method="POST" class="review-form">
+      {{ form.hidden_tag() }}
+
+      <div class="form-row">
+        <div class="form-group">
+          {{ form.title.label(class="form-label") }} {{
+          form.title(class="form-control" + (" is-invalid" if form.title.errors
+          else "")) }} {% if form.title.errors %}
+          <div class="form-errors">
+            {% for error in form.title.errors %}
+            <span class="error">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-row rating-row">
+        <div class="form-group">
+          {{ form.rating.label(class="form-label") }} {{
+          form.rating(class="form-control rating-select" + (" is-invalid" if
+          form.rating.errors else "")) }} {% if form.rating.errors %}
+          <div class="form-errors">
+            {% for error in form.rating.errors %}
+            <span class="error">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          {{ form.difficulty.label(class="form-label") }} {{
+          form.difficulty(class="form-control" + (" is-invalid" if
+          form.difficulty.errors else "")) }} {% if form.difficulty.errors %}
+          <div class="form-errors">
+            {% for error in form.difficulty.errors %}
+            <span class="error">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="form-group">
+          {{ form.workload.label(class="form-label") }} {{
+          form.workload(class="form-control" + (" is-invalid" if
+          form.workload.errors else "")) }} {% if form.workload.errors %}
+          <div class="form-errors">
+            {% for error in form.workload.errors %}
+            <span class="error">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          {{ form.comment.label(class="form-label") }} {{
+          form.comment(class="form-control" + (" is-invalid" if
+          form.comment.errors else "")) }} {% if form.comment.errors %}
+          <div class="form-errors">
+            {% for error in form.comment.errors %}
+            <span class="error">{{ error }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <small class="form-help"
+            >Minimum 50 characters. Be specific and helpful!</small
+          >
+        </div>
+      </div>
+
+      <fieldset class="optional-info">
+        <legend>Additional Information (Optional)</legend>
+
+        <div class="form-row optional-row">
+          <div class="form-group">
+            {{ form.semester_taken.label(class="form-label") }} {{
+            form.semester_taken(class="form-control") }}
+          </div>
+
+          <div class="form-group">
+            {{ form.professor.label(class="form-label") }} {{
+            form.professor(class="form-control") }}
+          </div>
+
+          <div class="form-group">
+            {{ form.grade_received.label(class="form-label") }} {{
+            form.grade_received(class="form-control") }}
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-actions">
+        {{ form.submit(class="btn btn-primary") }}
+        <a href="/course/{{ course.course_code }}" class="btn btn-secondary"
+          >Cancel</a
+        >
+      </div>
+    </form>
+
+    <div class="review-guidelines">
+      <h3>Review Guidelines</h3>
+      <ul>
+        <li>Be honest and constructive in your feedback</li>
+        <li>Focus on course content, difficulty, and workload</li>
+        <li>Avoid personal attacks on professors or other students</li>
+        <li>Include specific examples when possible</li>
+        <li>Help other students make informed decisions</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,171 @@
-{% extends "base.html" %} {% block title %}Home{% endblock %} {% block content
-%}
-<h1>Welcome to Flask</h1>
-<p>This is a minimal Flask application.</p>
+{% extends "base.html" %} {% block title %}Course Compass{% endblock %} {% block
+content %}
+
+<section id="courses" class="section alt">
+  <header class="section-header">
+    <h2>Interactive course explorer</h2>
+    <p>
+      Prototype filters help demonstrate how we&rsquo;ll surface explorer data
+      and peer sentiment side-by-side.
+    </p>
+  </header>
+  <form class="filter-bar" aria-label="Course filters">
+    <label>
+      Major focus
+      <select id="filter-major">
+        <option value="all">All majors</option>
+        <option value="CS">Computer Science</option>
+        <option value="ECE">Electrical &amp; Computer Engineering</option>
+        <option value="INFO">Information Sciences</option>
+        <option value="LAS">Liberal Arts &amp; Sciences</option>
+      </select>
+    </label>
+    <div class="gened-filter-container">
+      <label>Gen Ed Requirements</label>
+      <div class="gened-dropdown-wrapper">
+        <button
+          type="button"
+          id="gened-dropdown-btn"
+          class="gened-dropdown-btn"
+        >
+          <span>Add gen ed requirement</span>
+          <span class="dropdown-arrow">▼</span>
+        </button>
+        <div id="gened-dropdown" class="gened-dropdown">
+          <div class="gened-option" data-value="Advanced Composition">
+            Advanced Composition
+          </div>
+          <div class="gened-option" data-value="Composition I">
+            Composition I
+          </div>
+          <div class="gened-option" data-value="Cultural Studies - Non-West">
+            Cultural Studies - Non-West
+          </div>
+          <div class="gened-option" data-value="Cultural Studies - US Minority">
+            Cultural Studies - US Minority
+          </div>
+          <div class="gened-option" data-value="Cultural Studies - Western">
+            Cultural Studies - Western
+          </div>
+          <div class="gened-option" data-value="Humanities">Humanities</div>
+          <div
+            class="gened-option"
+            data-value="Nat Sci &amp; Tech - Life Sciences"
+          >
+            Natural Sciences &amp; Tech - Life Sciences
+          </div>
+          <div
+            class="gened-option"
+            data-value="Nat Sci &amp; Tech - Phys Sciences"
+          >
+            Natural Sciences &amp; Tech - Physical Sciences
+          </div>
+          <div class="gened-option" data-value="Quantitative Reasoning I">
+            Quantitative Reasoning I
+          </div>
+          <div class="gened-option" data-value="Quantitative Reasoning II">
+            Quantitative Reasoning II
+          </div>
+          <div class="gened-option" data-value="Social &amp; Beh Sci - Beh Sci">
+            Social &amp; Behavioral Sciences - Behavioral Sciences
+          </div>
+          <div class="gened-option" data-value="Social &amp; Beh Sci - Soc Sci">
+            Social &amp; Behavioral Sciences - Social Sciences
+          </div>
+        </div>
+      </div>
+      <div id="selected-geneds" class="selected-tags"></div>
+    </div>
+    <label>
+      Search
+      <input id="filter-search" type="search" placeholder="e.g. STAT 400" />
+    </label>
+  </form>
+  <div class="course-toolbar">
+    <p
+      id="course-summary"
+      class="course-summary"
+      role="status"
+      aria-live="polite"
+    >
+      Loading explorer data...
+    </p>
+    <button id="course-load-more" class="btn btn-ghost" type="button" disabled>
+      Load more courses
+    </button>
+  </div>
+  <div class="course-grid-container">
+    <button
+      id="course-scroll-left"
+      class="scroll-btn scroll-left"
+      aria-label="Scroll left"
+      disabled
+    >
+      <span>‹</span>
+    </button>
+    <div id="course-grid" class="card-grid" aria-live="polite"></div>
+    <button
+      id="course-scroll-right"
+      class="scroll-btn scroll-right"
+      aria-label="Scroll right"
+    >
+      <span>›</span>
+    </button>
+  </div>
+  <p class="scroll-hint">← Scroll to explore more courses →</p>
+</section>
+
+<section id="ai" class="section alt">
+  <header class="section-header">
+    <h2>AI assistant prototype</h2>
+    <p>
+      Share your goals and we&rsquo;ll outline how the AI copilot could guide
+      course discovery while honoring requirements.
+    </p>
+  </header>
+  <form id="ai-form" class="ai-form" aria-describedby="ai-note">
+    <div class="form-row">
+      <label for="ai-major">Major or pathway</label>
+      <input
+        id="ai-major"
+        name="ai-major"
+        type="text"
+        placeholder="e.g. CS + Advertising minor"
+        required
+      />
+    </div>
+    <div class="form-row">
+      <label for="ai-goals">What do you want to explore next?</label>
+      <textarea
+        id="ai-goals"
+        name="ai-goals"
+        rows="4"
+        placeholder="Tell the assistant about your workload goals, interests, or requirements."
+        required
+      ></textarea>
+    </div>
+    <fieldset class="form-row">
+      <legend>Weight these priorities</legend>
+      <label
+        ><input type="checkbox" name="priority" value="gened" checked />Complete
+        Gen Eds</label
+      >
+      <label
+        ><input type="checkbox" name="priority" value="balance" />Balance
+        workload</label
+      >
+      <label
+        ><input type="checkbox" name="priority" value="challenge" />Seek new
+        challenge</label
+      >
+    </fieldset>
+    <button type="submit" class="btn btn-primary">Generate mock plan</button>
+    <p id="ai-note" class="form-help">
+      Preview only: the real assistant will leverage scraped explorer data &amp;
+      historic review trends.
+    </p>
+  </form>
+  <div id="ai-output" class="ai-output" aria-live="assertive"></div>
+</section>
+
 {% endblock %}

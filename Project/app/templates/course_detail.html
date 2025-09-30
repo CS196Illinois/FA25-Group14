@@ -1,0 +1,256 @@
+{% extends "base.html" %} {% block title %}{{ course.course_code }} - {{
+course.course_name }}{% endblock %} {% block content %}
+<div class="course-detail">
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/">Course Compass</a></li>
+      <li><a href="/#courses">Course Explorer</a></li>
+      <li aria-current="page">{{ course.course_code }}</li>
+    </ol>
+  </nav>
+
+  <header class="course-header">
+    <div class="course-title-block">
+      <h1>{{ course.course_code }}</h1>
+      <h2>{{ course.course_name }}</h2>
+      <div class="course-badges">
+        <span class="badge badge-primary"
+          >{{ course.credit_hours or 'N/A' }} Credit Hours</span
+        >
+        <span class="badge badge-secondary"
+          >{{ course.department or 'Unknown Dept' }}</span
+        >
+        {% if course.gen_ed_requirements %}
+
+        <div class="gened-list">
+          {% set geneds = course.gen_ed_requirements.split(';') if ';' in
+          course.gen_ed_requirements else course.gen_ed_requirements.split(',')
+          %} {% for gened in geneds %} {% if gened.strip() %}
+          <span class="badge badge-gened">{{ gened.strip() }}</span>
+          {% endif %} {% endfor %}
+        </div>
+
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <div class="course-content">
+    <section class="course-main">
+      <div class="course-section">
+        <h3>Course Description</h3>
+        <div class="course-description">
+          {% if course.description %}
+          <p>{{ course.description }}</p>
+          {% else %}
+          <p class="empty-state">No description available for this course.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="course-section">
+        <h3>Course Information</h3>
+        <dl class="course-info-grid">
+          <dt>Course Code</dt>
+          <dd>{{ course.course_code }}</dd>
+
+          <dt>Department</dt>
+          <dd>{{ course.department or 'Not specified' }}</dd>
+
+          <dt>Credit Hours</dt>
+          <dd>{{ course.credit_hours or 'Not specified' }}</dd>
+
+          {% if course.gen_ed_requirements %}
+          <dt>Gen Ed Categories</dt>
+          <dd>
+            {% set geneds = course.gen_ed_requirements.split(';') if ';' in
+            course.gen_ed_requirements else
+            course.gen_ed_requirements.split(',') %} {% if geneds %} {{ geneds |
+            map('trim') | select | join(', ') }} {% else %} None listed {% endif
+            %}
+          </dd>
+          {% endif %}
+        </dl>
+      </div>
+
+      <!-- Reviews Section -->
+      <div class="course-section">
+        <div class="reviews-header">
+          <h3>Student Reviews</h3>
+          {% if current_user.is_authenticated %} {% if user_review %}
+          <div class="review-actions">
+            <a
+              href="{{ url_for('main.edit_review', course_code=course.course_code) }}"
+              class="btn btn-ghost btn-sm"
+              >Edit My Review</a
+            >
+            <form
+              method="POST"
+              action="{{ url_for('main.delete_review', course_code=course.course_code) }}"
+              class="delete-form"
+              onsubmit="return confirm('Are you sure you want to delete your review?')"
+            >
+              <button type="submit" class="btn btn-ghost btn-sm btn-danger">
+                Delete My Review
+              </button>
+            </form>
+          </div>
+          {% else %}
+          <a
+            href="{{ url_for('main.add_review', course_code=course.course_code) }}"
+            class="btn btn-primary"
+            >Leave a Review</a
+          >
+          {% endif %} {% else %}
+          <div class="login-prompt">
+            <a
+              href="{{ url_for('main.login', next=url_for('main.add_review', course_code=course.course_code)) }}"
+              class="btn btn-primary"
+              >Log In to Review</a
+            >
+            <p class="login-hint">Share your experience with other students</p>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if reviews %}
+        <div class="reviews-list">
+          {% for review in reviews %}
+          <article
+            class="review-item {% if current_user.is_authenticated and review.user_id == current_user.id %}user-review{% endif %}"
+          >
+            <header class="review-header">
+              <div class="review-meta">
+                <span class="reviewer-name">{{ review.author.name }}</span>
+                <span class="review-date">{{ review.time_ago }}</span>
+                {% if review.semester_taken %}
+                <span class="semester">{{ review.semester_taken }}</span>
+                {% endif %} {% if review.grade_received %}
+                <span class="grade">Grade: {{ review.grade_received }}</span>
+                {% endif %}
+              </div>
+              <div class="review-ratings">
+                <div class="rating-item">
+                  <span class="rating-label">Overall:</span>
+                  <span class="stars">{{ review.rating_stars }}</span>
+                </div>
+                <div class="rating-item">
+                  <span class="rating-label">Difficulty:</span>
+                  <span class="rating-value">{{ review.difficulty }}/5</span>
+                </div>
+                <div class="rating-item">
+                  <span class="rating-label">Workload:</span>
+                  <span class="rating-value">{{ review.workload }}/5</span>
+                </div>
+              </div>
+            </header>
+
+            <div class="review-content">
+              <h4 class="review-title">{{ review.title }}</h4>
+              <p class="review-comment">{{ review.comment }}</p>
+              {% if review.professor %}
+              <p class="review-professor">Professor: {{ review.professor }}</p>
+              {% endif %}
+            </div>
+          </article>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="no-reviews">
+          <p>No reviews yet for this course.</p>
+          {% if current_user.is_authenticated %}
+          <p>
+            Be the first to
+            <a
+              href="{{ url_for('main.add_review', course_code=course.course_code) }}"
+              >share your experience</a
+            >!
+          </p>
+          {% else %}
+          <p>
+            <a href="{{ url_for('main.login') }}">Log in</a> to be the first to
+            review this course.
+          </p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <aside class="course-sidebar">
+      {% if reviews %}
+      <div class="stats-section">
+        <h3>Course Statistics</h3>
+        <div class="course-stats">
+          <div class="stat-item">
+            <span class="stat-label">Average Rating</span>
+            <div class="rating-display">
+              {% for i in range(1, 6) %}
+              <span class="star {% if i <= avg_rating %}filled{% endif %}"
+                >★</span
+              >
+              {% endfor %}
+              <span class="rating-text"
+                >({{ "%.1f"|format(avg_rating) }}/5)</span
+              >
+            </div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Difficulty</span>
+            <span class="stat-value"
+              >{{ "%.1f"|format(avg_difficulty) }}/5</span
+            >
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Workload</span>
+            <span class="stat-value">{{ "%.1f"|format(avg_workload) }}/5</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Reviews</span>
+            <span class="stat-value"
+              >{{ reviews|length }} review{{ 's' if reviews|length != 1 else ''
+              }}</span
+            >
+          </div>
+        </div>
+      </div>
+      {% endif %} {% if related_courses %}
+      <div class="related-section">
+        <h3>Related Courses in {{ course.department }}</h3>
+        <div class="related-courses">
+          {% for related in related_courses %}
+          <article class="related-course-card">
+            <a href="/course/{{ related.course_code }}" class="related-link">
+              <header>
+                <h4>{{ related.course_code }}</h4>
+                <span class="related-credits"
+                  >{{ related.credit_hours or 'N/A' }} hrs</span
+                >
+              </header>
+              <p class="related-title">{{ related.course_name }}</p>
+              {% if related.description %}
+              <p class="related-description">
+                {{ related.description[:120] }}{% if related.description|length
+                > 120 %}...{% endif %}
+              </p>
+              {% endif %}
+            </a>
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="action-section">
+        <h3>Quick Actions</h3>
+        <div class="action-buttons">
+          <a href="/#courses" class="btn btn-secondary">Back to Explorer</a>
+          <button class="btn btn-ghost" onclick="window.print()">
+            Print Course Info
+          </button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

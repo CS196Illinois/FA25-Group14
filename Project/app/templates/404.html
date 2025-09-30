@@ -1,0 +1,32 @@
+{% extends "base.html" %} {% block title %}Course Not Found{% endblock %} {%
+block content %}
+<div class="error-page">
+  <header class="error-header">
+    <h1>Course Not Found</h1>
+    <p>
+      We couldn't find a course with the code
+      <strong>{{ course_code }}</strong>.
+    </p>
+  </header>
+
+  <div class="error-content">
+    <div class="error-suggestions">
+      <h2>What you can do:</h2>
+      <ul>
+        <li>Check the course code spelling</li>
+        <li>
+          Try searching for the course in our
+          <a href="/#courses">Course Explorer</a>
+        </li>
+        <li>Browse courses by department</li>
+        <li>Return to the <a href="/">homepage</a></li>
+      </ul>
+    </div>
+
+    <div class="error-actions">
+      <a href="/#courses" class="btn btn-primary">Browse All Courses</a>
+      <a href="/" class="btn btn-secondary">Go to Homepage</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
