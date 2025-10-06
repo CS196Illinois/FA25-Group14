@@ -23,6 +23,9 @@
           <ul>
             <li><a href="/#courses">Course Explorer</a></li>
             <li><a href="/#ai">AI Assistant</a></li>
+            {% if current_user.is_authenticated %}
+            <li><a href="{{ url_for('canvas.import_courses_page') }}">Import Courses</a></li>
+            {% endif %}
           </ul>
         </nav>
         <div class="auth-nav">

@@ -1,6 +1,8 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash 
+import re 
 
 db = SQLAlchemy()
 
@@ -12,6 +14,10 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     
+    login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
+    last_login = db.Column(db.DateTime, nullable=True)
+
     # Relationship to reviews
     reviews = db.relationship('Review', backref='author', lazy=True, cascade='all, delete-orphan')
     
@@ -21,6 +27,47 @@ class User(UserMixin, db.Model):
     @property
     def is_illinois_email(self):
         return self.email.endswith('@illinois.edu')
+    
+    def set_password(self, password):
+        """Set password with strength validation"""
+        if len(password) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not re.search(r'[A-Za-z]', password) or not re.search(r'\d', password):
+            raise ValueError('Password must contain both letters and numbers')
+        
+        weak_passwords = ['password', '12345678', 'qwertyui', 'iloveyou', 'admin123']
+        if password.lower() in weak_passwords:
+            raise ValueError('Please choose a stronger password')
+        
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def is_account_locked(self):
+        """Check if account is temporarily locked"""
+        if self.locked_until and datetime.utcnow() < self.locked_until:
+            return True
+                # Reset lock if time has passed
+        if self.locked_until and datetime.utcnow() >= self.locked_until:
+            self.locked_until = None
+            self.login_attempts = 0
+            db.session.commit()
+        return False
+    
+    def record_failed_login(self):
+        """Record failed login attempt"""
+        self.login_attempts += 1
+        if self.login_attempts >= 5:  # Lock for 15 minutes after 5 failed attempts
+            self.locked_until = datetime.utcnow() + timedelta(minutes=15)
+        db.session.commit()
+    
+    def reset_login_attempts(self):
+        """Reset login attempt counter"""
+        self.login_attempts = 0
+        self.locked_until = None
+        self.last_login = datetime.utcnow()
+        db.session.commit()
 
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -1,3 +1,4 @@
+# app/auth/routes.py
 from __future__ import annotations
 
 import csv
@@ -5,6 +6,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
@@ -15,9 +17,7 @@ bp = Blueprint('main', __name__)
 DATA_PATH = Path(__file__).resolve().parent / 'all_courses.csv'
 _GENED_SPLIT = re.compile(r'[;,]')
 
-
 CourseRecord = Dict[str, str]
-
 
 @lru_cache(maxsize=1)
 def _load_courses() -> List[CourseRecord]:
@@ -39,6 +39,91 @@ def _load_courses() -> List[CourseRecord]:
     
     return courses
 
+# Authentication routes
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    from app.forms import LoginForm
+    from app.models import User, db
+    
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data.lower()).first()
+        
+        # Check if account is locked
+        if user and user.is_account_locked():
+            remaining_time = user.locked_until - datetime.utcnow()
+            minutes = int(remaining_time.total_seconds() // 60) + 1
+            flash(f'Account temporarily locked due to too many failed attempts. Please try again in {minutes} minutes.', 'error')
+            return render_template('auth/login.html', form=form)
+        
+        if user and user.check_password(form.password.data):
+            user.reset_login_attempts()
+            login_user(user, remember=True)
+            next_page = request.args.get('next')
+            if not next_page or not next_page.startswith('/'):
+                next_page = url_for('main.index')
+            flash('Welcome back!', 'success')
+            return redirect(next_page)
+        else:
+            # Record failed attempt
+            if user:
+                user.record_failed_login()
+                attempts_left = 5 - user.login_attempts
+                if attempts_left > 0:
+                    flash(f'Invalid email or password. {attempts_left} attempts remaining.', 'error')
+                else:
+                    flash('Account locked due to too many failed attempts. Please try again in 15 minutes.', 'error')
+            else:
+                flash('Invalid email or password', 'error')
+    
+    return render_template('auth/login.html', form=form)
+
+@bp.route('/register', methods=['GET', 'POST'])
+def register():
+    from app.forms import RegisterForm
+    from app.models import User, db
+    
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    
+    form = RegisterForm()
+    if form.validate_on_submit():
+        # Check if user already exists
+        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
+        if existing_user:
+            flash('An account with this email already exists', 'error')
+            return render_template('auth/register.html', form=form)
+        
+        try:
+            # Create new user with enhanced password security
+            user = User(
+                name=form.name.data,
+                email=form.email.data.lower(),
+            )
+            user.set_password(form.password.data)  # Use enhanced password method
+            
+            db.session.add(user)
+            db.session.commit()
+            
+            login_user(user, remember=True)
+            flash('Welcome to Course Compass! Your account has been created.', 'success')
+            return redirect(url_for('main.index'))
+        
+        except ValueError as e:
+            # Handle password strength errors
+            flash(str(e), 'error')
+    
+    return render_template('auth/register.html', form=form)
+
+@bp.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out', 'info')
+    return redirect(url_for('main.index'))
 
 @bp.route('/api/courses/meta')
 def courses_meta():
@@ -51,7 +136,6 @@ def courses_meta():
         if part.strip()
     })
     return jsonify({'departments': departments, 'geneds': geneds})
-
 
 @bp.route('/api/courses')
 def api_courses():
@@ -149,7 +233,6 @@ def index():
 @bp.route('/course/<course_code>')
 def course_detail(course_code):
     from app.models import Review
-    from flask_login import current_user
     
     courses = _load_courses()
     course = next((c for c in courses if c['course_code'] == course_code), None)
@@ -196,69 +279,7 @@ def course_detail(course_code):
                          avg_workload=avg_workload,
                          user_review=user_review)
 
-# Authentication routes
-@bp.route('/login', methods=['GET', 'POST'])
-def login():
-    from app.forms import LoginForm
-    from app.models import User, db
-    
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
-        if user and check_password_hash(user.password_hash, form.password.data):
-            login_user(user, remember=True)
-            next_page = request.args.get('next')
-            if not next_page or not next_page.startswith('/'):
-                next_page = url_for('main.index')
-            flash('Welcome back!', 'success')
-            return redirect(next_page)
-        else:
-            flash('Invalid email or password', 'error')
-    
-    return render_template('auth/login.html', form=form)
-
-@bp.route('/register', methods=['GET', 'POST'])
-def register():
-    from app.forms import RegisterForm
-    from app.models import User, db
-    
-    if current_user.is_authenticated:
-        return redirect(url_for('main.index'))
-    
-    form = RegisterForm()
-    if form.validate_on_submit():
-        # Check if user already exists
-        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
-        if existing_user:
-            flash('An account with this email already exists', 'error')
-            return render_template('auth/register.html', form=form)
-        
-        # Create new user
-        user = User(
-            name=form.name.data,
-            email=form.email.data.lower(),
-            password_hash=generate_password_hash(form.password.data)
-        )
-        db.session.add(user)
-        db.session.commit()
-        
-        login_user(user, remember=True)
-        flash('Welcome to Course Compass! Your account has been created.', 'success')
-        return redirect(url_for('main.index'))
-    
-    return render_template('auth/register.html', form=form)
-
-@bp.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash('You have been logged out', 'info')
-    return redirect(url_for('main.index'))
-
-# Review routes
+# Review routes 
 @bp.route('/course/<course_code>/review', methods=['GET', 'POST'])
 @login_required
 def add_review(course_code):

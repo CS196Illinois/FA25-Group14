@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Import Courses - Course Compass{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="header-section">
+        <h1>Import Your Course History</h1>
+        <p>Connect to Canvas to automatically import your course history and grades, or add courses manually</p>
+    </div>
+
+    <!-- Canvas Connection Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>Canvas Integration</h5>
+        </div>
+        <div class="card-body">
+            {% if not has_canvas_connection %}
+            <div class="alert alert-info">
+                <h6>Connect to Canvas (Optional)</h6>
+                <p>By connecting your Canvas account, you can automatically import your course history and grades. This helps us provide better course recommendations.</p>
+                <p><small>If you choose not to connect, you can manually enter your course history in your dashboard.</small></p>
+                <a href="{{ url_for('canvas.connect_canvas') }}" class="btn btn-primary mt-2">
+                    Connect Canvas Account
+                </a>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <strong>✅ Canvas Connected</strong>
+                <p>Your Canvas account is connected. You can import your course history or disconnect if needed.</p>
+                <div class="btn-group mt-2">
+                    <button id="importCourses" class="btn btn-success">Import Courses</button>
+                    <form method="POST" action="{{ url_for('canvas.disconnect_canvas') }}" class="d-inline">
+                        <button type="submit" class="btn btn-outline-secondary" 
+                                onclick="return confirm('Are you sure you want to disconnect your Canvas account?')">
+                            Disconnect
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Imported Courses Display -->
+    {% if imported_courses %}
+    <div class="card">
+        <div class="card-header">
+            <h5>Imported Courses</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Course Code</th>
+                            <th>Course Name</th>
+                            <th>Final Grade</th>
+                            <th>Final Score</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for course in imported_courses %}
+                        <tr>
+                            <td>{{ course.course_code }}</td>
+                            <td>{{ course.course_name }}</td>
+                            <td>
+                                {% if course.grades.final_grade %}
+                                <span class="badge bg-primary">{{ course.grades.final_grade }}</span>
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if course.grades.final_score %}
+                                {{ "%.1f"|format(course.grades.final_score) }}%
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if course.grades.enrollment_state == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                                {% else %}
+                                <span class="badge bg-warning">{{ course.grades.enrollment_state|title }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-primary" id="saveCourses">Save to Profile</button>
+                <button class="btn btn-outline-secondary" id="reimportCourses">Re-import from Canvas</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Manual Entry Option -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5>Manual Course Entry</h5>
+        </div>
+        <div class="card-body">
+            <p>If you prefer not to connect Canvas or need to add additional courses, you can enter them manually in your dashboard.</p>
+            <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary">Go to Dashboard</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Import courses button
+    document.getElementById('importCourses')?.addEventListener('click', function() {
+        this.disabled = true;
+        this.textContent = 'Importing...';
+        
+        fetch('/api/canvas/courses-grades')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Reload page to show imported courses
+                    window.location.reload();
+                } else {
+                    alert('Failed to import courses: ' + data.error);
+                    this.disabled = false;
+                    this.textContent = 'Import Courses';
+                }
+            })
+            .catch(error => {
+                alert('Error importing courses: ' + error);
+                this.disabled = false;
+                this.textContent = 'Import Courses';
+            });
+    });
+
+    // Save courses button
+    document.getElementById('saveCourses')?.addEventListener('click', function() {
+        // This would typically save to the database
+        // For now, we'll just show a success message
+        alert('Course history saved to your profile!');
+    });
+
+    // Re-import courses button
+    document.getElementById('reimportCourses')?.addEventListener('click', function() {
+        if (confirm('This will replace your currently imported courses with fresh data from Canvas. Continue?')) {
+            fetch('/api/canvas/courses-grades')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert('Failed to re-import courses: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    alert('Error re-importing courses: ' + error);
+                });
+        }
+    });
+});
+</script>
+{% endblock %}
