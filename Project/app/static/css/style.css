@@ -1884,3 +1884,5 @@ fieldset.form-row legend {
     flex-wrap: wrap;
   }
 }
+
+@import url('dashboard.css')

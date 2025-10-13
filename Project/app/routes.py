@@ -10,6 +10,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 
+from datetime import datetime
+from app.models import db, UserRequirements
+
 bp = Blueprint('main', __name__)
 
 DATA_PATH = Path(__file__).resolve().parent / 'all_courses.csv'
@@ -357,3 +360,101 @@ def delete_review(course_code):
 @bp.route('/hello')
 def hello():
     return 'Hello, Flask!'
+
+# Dashboard routes
+@bp.route('/dashboard')
+@login_required
+def dashboard():
+    from app.forms import PasswordUpdateForm, AuditUploadForm
+    
+    # Get or create user requirements
+    requirements = UserRequirements.query.filter_by(user_id=current_user.id).first()
+    if not requirements:
+        requirements = UserRequirements(user_id=current_user.id)
+        db.session.add(requirements)
+        db.session.commit()
+    
+    password_form = PasswordUpdateForm()
+    audit_form = AuditUploadForm()
+    
+    return render_template('dashboard/dashboard.html', 
+                         requirements=requirements,
+                         password_form=password_form,
+                         audit_form=audit_form)
+
+@bp.route('/upload_audit', methods=['POST'])
+@login_required
+def upload_audit():
+    from app.forms import AuditUploadForm
+    from app.utils.pdf_parser import DegreeAuditParser
+    from app.models import UserRequirements
+    
+    form = AuditUploadForm()
+    requirements = UserRequirements.query.filter_by(user_id=current_user.id).first()
+    
+    if form.validate_on_submit():
+        try:
+            # Parse the PDF
+            parser = DegreeAuditParser(form.audit_file.data)
+            parsed_requirements = parser.parse_requirements()
+            
+            # Update user requirements
+            for key, value in parsed_requirements.items():
+                if hasattr(requirements, key):
+                    setattr(requirements, key, value)
+            
+            requirements.audit_uploaded = True
+            requirements.last_updated = datetime.utcnow()
+            db.session.commit()
+            
+            flash('Degree audit uploaded and parsed successfully!', 'success')
+        except Exception as e:
+            flash(f'Error processing PDF: {str(e)}', 'error')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{getattr(form, field).label.text}: {error}', 'error')
+    
+    return redirect(url_for('main.dashboard'))
+
+@bp.route('/update_password', methods=['POST'])
+@login_required
+def update_password():
+    from app.forms import PasswordUpdateForm
+    
+    form = PasswordUpdateForm()
+    if form.validate_on_submit():
+        # Verify current password
+        if check_password_hash(current_user.password_hash, form.current_password.data):
+            # Update password
+            current_user.password_hash = generate_password_hash(form.new_password.data)
+            db.session.commit()
+            flash('Your password has been updated successfully!', 'success')
+        else:
+            flash('Current password is incorrect', 'error')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{getattr(form, field).label.text}: {error}', 'error')
+    
+    return redirect(url_for('main.dashboard'))
+
+@bp.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    from app.forms import PasswordUpdateForm
+    
+    form = PasswordUpdateForm()
+    
+    if form.validate_on_submit():
+        # Verify current password
+        if check_password_hash(current_user.password_hash, form.current_password.data):
+            # Update password
+            current_user.password_hash = generate_password_hash(form.new_password.data)
+            db.session.commit()
+            flash('Your password has been updated successfully!', 'success')
+            return redirect(url_for('main.dashboard'))
+        else:
+            flash('Current password is incorrect', 'error')
+    
+    return render_template('auth/change_password.html', form=form)
