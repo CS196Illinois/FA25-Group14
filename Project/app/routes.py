@@ -7,8 +7,22 @@ from pathlib import Path
 from typing import Dict, List
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash
+from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
+from google import genai
+from google.genai import types
+import os
+from app.models import Review
+from flask_login import current_user
+from app.forms import LoginForm
+from app.models import User, db
+from app.forms import RegisterForm
+from app.models import User, db
+from app.forms import ReviewForm
+from app.models import Review, db
+from app.forms import EditReviewForm
+from app.models import Review, db
+from app.models import Review, db
 
 bp = Blueprint('main', __name__)
 
@@ -148,8 +162,7 @@ def index():
 
 @bp.route('/course/<course_code>')
 def course_detail(course_code):
-    from app.models import Review
-    from flask_login import current_user
+
     
     courses = _load_courses()
     course = next((c for c in courses if c['course_code'] == course_code), None)
@@ -199,8 +212,7 @@ def course_detail(course_code):
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
-    from app.forms import LoginForm
-    from app.models import User, db
+
     
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -222,8 +234,7 @@ def login():
 
 @bp.route('/register', methods=['GET', 'POST'])
 def register():
-    from app.forms import RegisterForm
-    from app.models import User, db
+
     
     if current_user.is_authenticated:
         return redirect(url_for('main.index'))
@@ -262,8 +273,7 @@ def logout():
 @bp.route('/course/<course_code>/review', methods=['GET', 'POST'])
 @login_required
 def add_review(course_code):
-    from app.forms import ReviewForm
-    from app.models import Review, db
+
     
     courses = _load_courses()
     course = next((c for c in courses if c['course_code'] == course_code), None)
@@ -307,8 +317,7 @@ def add_review(course_code):
 @bp.route('/course/<course_code>/review/edit', methods=['GET', 'POST'])
 @login_required
 def edit_review(course_code):
-    from app.forms import EditReviewForm
-    from app.models import Review, db
+
     
     review = Review.query.filter_by(
         course_code=course_code,
@@ -338,7 +347,6 @@ def edit_review(course_code):
 @bp.route('/course/<course_code>/review/delete', methods=['POST'])
 @login_required
 def delete_review(course_code):
-    from app.models import Review, db
     
     review = Review.query.filter_by(
         course_code=course_code,
@@ -353,6 +361,136 @@ def delete_review(course_code):
         flash('Review not found', 'error')
     
     return redirect(url_for('main.course_detail', course_code=course_code))
+
+@bp.route('/api/ai-assistant', methods=['POST'])
+def ai_assistant():
+    """Generate course recommendations using Gemini AI"""
+    
+
+    try:
+
+        client = genai.Client()
+        # Get form data
+        data = request.get_json()
+        major = data.get('major', '')
+        goals = data.get('goals', '')
+        priorities = data.get('priorities', [])
+        
+        if not major or not goals:
+            return jsonify({'error': 'Major and goals are required'}), 400
+        
+        # Configure Gemini
+        api_key = os.environ.get('GEMINI_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'Gemini API key not configured'}), 500
+        
+        model = "gemini-2.5-flash"
+        
+        # Get course data for context
+        courses = _load_courses()
+        
+        # Build course context (limit to relevant departments)
+        course_context = ""
+
+        prompt_get_course_codes = r"""Given the user's major and interests, recommend 3 course codes available at UIUC that would match those interests. Output Format:
+Output ONLY three comma separated course codes in this format:
+AAS,CS,MATH
+DO NOT include any extra text
+"""
+
+        response = client.models.generate_content(model = model, contents = prompt_get_course_codes)
+        course_codes: list[str] = response.text.split(',')
+        courses = list(filter(lambda c: c['department'] in course_codes, courses))
+        if courses:
+            # Sample some courses to provide context
+            sample_courses = courses  # Limit to avoid token limits
+            course_context = "\n".join([
+                f"- {c['course_code']}: {c['course_name']} ({c['credit_hours']} hrs) - {c['gen_ed_requirements']}"
+                for c in sample_courses if c['course_code'] and c['course_name']
+            ])
+
+            
+        
+        # Build the prompt
+        priorities_text = ", ".join(priorities) if priorities else "No specific priorities"
+        user_info = f"""
+        Major: {major}
+        Goals/Interests: {goals}
+        Priorities: {priorities_text}
+        """
+
+        prompt = f"""
+        User Information:
+        {user_info}
+
+        Available Courses:
+        {course_context}
+        """ + r"""
+
+You are an AI course advisor for UIUC students. 
+
+Your job is to recommend 3-4 courses the student should consider given their academic information and a list of available courses.
+
+Primary goal:
+Help the student choose Gen-Ed courses that 1) fulfill their remaining Gen-Ed requirements 2) match their personal interests
+
+How to recommend courses:
+-FIRST, focus on Gen-Ed needs
+-Among Gen-Ed courses, choose those that match the student’s interests
+-Avoid recommending courses the student has already taken or is currently taking
+-Make sure prerequisites are satisfied
+-If the student has few/no Gen-Ed needs or there is a strong match with interests/goals, optimally include major related or elective courses
+-For each recommended course, give a short reason
+
+Output Format:
+Output ONLY valid JSON in this format:
+{
+  "recommended_courses": [
+    {
+      "course": "COURSE_CODE",
+      "reason": "Short reason here"
+    }
+  ]
+}
+
+DO NOT include any extra text outside the JSON.
+DO NOT wrap the JSON in markdown (no ```).
+ONLY output the JSON object.
+
+
+
+Example Output:
+{
+  "recommended_courses": [
+    {
+      "course": "PHIL 202",
+      "reason": "Fulfills Humanities Gen-Ed and matches interest in philosophy"
+    },
+    {
+      "course": "STAT 200",
+      "reason": "Fulfills Quantitative Reasoning Gen-Ed and aligns with interest in data"
+    },
+    {
+      "course": "CS 225",
+      "reason": "Core CS course and useful next step in the major"
+    }
+  ]
+}
+"""
+
+        # Generate response
+        response = client.models.generate_content(model = model, contents = prompt)
+        response = json.loads(response.text)
+        return jsonify({
+            'success': True,
+            'recommendation': response
+        })
+        
+    except Exception as e:
+        print(f"Error in AI assistant: {str(e)}")
+        return jsonify({
+            'error': f'Failed to generate recommendation: {str(e)}'
+        }), 500
 
 @bp.route('/hello')
 def hello():

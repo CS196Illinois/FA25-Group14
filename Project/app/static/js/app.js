@@ -413,37 +413,114 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5000);
   });
 
-  // ---- AI assistant mock ----
+  // ---- AI assistant with Gemini API ----
   const aiForm = document.querySelector("#ai-form");
   const aiOutput = document.querySelector("#ai-output");
   if (aiForm && aiOutput) {
-    aiForm.addEventListener("submit", (event) => {
+    aiForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+
       const formData = new FormData(aiForm);
       const major = formData.get("ai-major");
       const goals = formData.get("ai-goals");
       const priorities = formData.getAll("priority");
 
-      const prioritiesLabel = priorities.length
-        ? priorities.join(", ")
-        : "balanced exploration";
-
+      // Show loading state
       aiOutput.innerHTML = `
-        <h3>Your personalized recommendation preview</h3>
-        <p>
-          Based on your focus in <strong>${major}</strong> and priorities around
-          <strong>${prioritiesLabel}</strong>, we suggest pairing
-          <strong>INFO 303</strong> with <strong>ART 310</strong> to satisfy an
-          open requirement while keeping workload steady.
-        </p>
-        <p>
-          We'll also watch for schedule conflicts and surface alternative sections.
-          Expect smarter iterations once Supabase &amp; the explorer parser connect.
-        </p>
+        <div class="ai-loading">
+          <div class="loading-spinner"></div>
+          <p>Generating personalized recommendations...</p>
+        </div>
       `;
-
       aiOutput.classList.add("active");
       aiOutput.scrollIntoView({ behavior: "smooth", block: "start" });
+
+      try {
+        // Call the AI endpoint
+        const response = await fetch("/api/ai-assistant", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            major: major,
+            goals: goals,
+            priorities: priorities,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.error || "Failed to generate recommendation"
+          );
+        }
+
+        const data = await response.json();
+
+        // Parse JSON response
+        let recommendationHTML = "";
+        try {
+          const jsonResponse =
+            typeof data.recommendation === "string"
+              ? JSON.parse(data.recommendation)
+              : data.recommendation;
+
+          if (
+            jsonResponse.recommended_courses &&
+            Array.isArray(jsonResponse.recommended_courses)
+          ) {
+            recommendationHTML = jsonResponse.recommended_courses
+              .map(
+                (course) => `
+              <a href="/course/${encodeURIComponent(
+                course.course
+              )}" class="course-recommendation-card">
+                <div class="course-code">${course.course}</div>
+                <div class="course-reason">${course.reason}</div>
+              </a>
+            `
+              )
+              .join("");
+          } else {
+            // Fallback if JSON doesn't match expected structure
+            recommendationHTML = `<p>${
+              typeof data.recommendation === "string"
+                ? data.recommendation
+                : JSON.stringify(data.recommendation)
+            }</p>`;
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, display as plain text
+          console.error("Failed to parse JSON response:", parseError);
+          recommendationHTML = `<p>${data.recommendation}</p>`;
+        }
+
+        // Display the AI response
+        aiOutput.innerHTML = `
+          <h3>Your Personalized Course Recommendations</h3>
+          <div class="ai-recommendation">
+            ${recommendationHTML}
+          </div>
+          <button type="button" class="btn btn-ghost" onclick="this.parentElement.classList.remove('active')">
+            Close
+          </button>
+        `;
+      } catch (error) {
+        console.error("AI assistant error:", error);
+        aiOutput.innerHTML = `
+          <h3>Unable to Generate Recommendation</h3>
+          <p class="error-message">
+            ${
+              error.message ||
+              "Sorry, we couldn't generate a recommendation at this time. Please try again."
+            }
+          </p>
+          <button type="button" class="btn btn-ghost" onclick="this.parentElement.classList.remove('active')">
+            Close
+          </button>
+        `;
+      }
     });
   }
 
