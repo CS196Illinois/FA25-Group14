@@ -21,6 +21,44 @@ class User(UserMixin, db.Model):
     @property
     def is_illinois_email(self):
         return self.email.endswith('@illinois.edu')
+    
+class UserRequirements(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    
+    # Core Requirements
+    advanced_composition = db.Column(db.Boolean, default=False) # 1
+    composition1 = db.Column(db.Boolean, default=False) # 2
+    quantitative_reasoning1 = db.Column(db.Boolean, default=False) # 6.1
+    quantitative_reasoning2 = db.Column(db.Boolean, default=False) # 6.2
+    
+    # Cultural Studies
+    western_culture = db.Column(db.Boolean, default=False) # 3.1
+    non_western_culture = db.Column(db.Boolean, default=False) # 3.2
+    us_minority_culture = db.Column(db.Boolean, default=False) # 3.3
+    
+    # Language Requirement
+    language_requirement = db.Column(db.Boolean, default=False)
+    
+    # General Education Categories
+    humanities_arts = db.Column(db.Boolean, default=False) # 4
+    social_behavioral = db.Column(db.Boolean, default=False) # 7
+    natural_sciences = db.Column(db.Boolean, default=False) # 5
+    
+    # Subcategories
+    humanities_hp = db.Column(db.Boolean, default=False)  # Historical & Philosophical
+    humanities_la = db.Column(db.Boolean, default=False)  # Literature & Arts
+    social_behavioral_bsc = db.Column(db.Boolean, default=False)  # Behavioral Sciences
+    social_behavioral_ss = db.Column(db.Boolean, default=False)   # Social Sciences
+    natural_sciences_ls = db.Column(db.Boolean, default=False)    # Life Sciences
+    natural_sciences_ps = db.Column(db.Boolean, default=False)    # Physical Sciences
+    
+    # Additional info
+    audit_uploaded = db.Column(db.Boolean, default=False)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<UserRequirements for {self.user.email}>'
 
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)

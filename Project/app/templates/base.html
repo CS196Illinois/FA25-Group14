@@ -8,6 +8,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='css/style.css') }}"
     />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   </head>
   <body class="page">
     <a class="skip-link" href="#main">Skip to main content</a>
@@ -27,21 +28,16 @@
         </nav>
         <div class="auth-nav">
           {% if current_user.is_authenticated %}
-          <span class="user-greeting"
-            >Hi, {{ current_user.name.split(' ')[0] }}!</span
-          >
-          <a href="{{ url_for('main.logout') }}" class="btn btn-ghost btn-sm"
-            >Log Out</a
-          >
+          <div class="user-menu">
+            <a href="{{ url_for('main.dashboard') }}" class="user-icon-link" title="Dashboard">
+              <i class="fas fa-user-circle"></i>
+              <span class="user-greeting">Hi, {{ current_user.name.split(' ')[0] }}!</span>
+            </a>
+            <a href="{{ url_for('main.logout') }}" class="btn btn-ghost btn-sm">Log Out</a>
+          </div>
           {% else %}
-          <a href="{{ url_for('main.login') }}" class="btn btn-ghost btn-sm"
-            >Log In</a
-          >
-          <a
-            href="{{ url_for('main.register') }}"
-            class="btn btn-primary btn-sm"
-            >Sign Up</a
-          >
+          <a href="{{ url_for('main.login') }}" class="btn btn-ghost btn-sm">Log In</a>
+          <a href="{{ url_for('main.register') }}" class="btn btn-primary btn-sm">Sign Up</a>
           {% endif %}
         </div>
       </div>

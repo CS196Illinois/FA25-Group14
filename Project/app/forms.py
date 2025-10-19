@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, SelectField, PasswordField, SubmitField
 from wtforms.validators import DataRequired, Length, Email, NumberRange, ValidationError
 from wtforms.widgets import TextArea
+from flask_wtf.file import FileField, FileAllowed, FileRequired
 import re
 
 class LoginForm(FlaskForm):
@@ -147,3 +148,27 @@ class ReviewForm(FlaskForm):
 
 class EditReviewForm(ReviewForm):
     submit = SubmitField('Update Review')
+
+class PasswordUpdateForm(FlaskForm):
+    current_password = PasswordField('Current Password', validators=[
+        DataRequired(message='Current password is required')
+    ])
+    new_password = PasswordField('New Password', validators=[
+        DataRequired(message='New password is required'),
+        Length(min=6, message='Password must be at least 6 characters')
+    ])
+    confirm_password = PasswordField('Confirm New Password', validators=[
+        DataRequired(message='Please confirm your new password')
+    ])
+    submit = SubmitField('Update Password')
+    
+    def validate_confirm_password(self, field):
+        if field.data != self.new_password.data:
+            raise ValidationError('Passwords must match')
+
+class AuditUploadForm(FlaskForm):
+    audit_file = FileField('Degree Audit PDF', validators=[
+        FileRequired(message='Please select a PDF file'),
+        FileAllowed(['pdf'], 'Only PDF files are allowed!')
+    ])
+    submit = SubmitField('Upload Audit')

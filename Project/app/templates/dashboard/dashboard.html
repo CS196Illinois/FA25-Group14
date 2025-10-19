@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Course Compass{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Student Dashboard</h1>
+        <p class="subtitle">Manage your account and track degree progress</p>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- User Information Section -->
+        <div class="dashboard-card">
+            <h2><i class="fas fa-user"></i> User Information</h2>
+            <div class="user-info">
+                <div class="info-item">
+                    <label>Name:</label>
+                    <span>{{ current_user.name }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Email:</label>
+                    <span>{{ current_user.email }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Password:</label>
+                    <span>••••••••</span>
+                    <a href="{{ url_for('main.change_password') }}" class="btn-text">Change Password</a>
+                </div>
+                <div class="info-item">
+                    <label>Member since:</label>
+                    <span>{{ current_user.created_at.strftime('%B %d, %Y') }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Degree Audit Upload Section -->
+        <div class="dashboard-card">
+            <h2><i class="fas fa-file-upload"></i> Degree Audit</h2>
+            <div class="upload-section">
+                <p>Upload your UIUC Degree Audit PDF to automatically track your General Education requirements.</p>
+                
+                <form action="{{ url_for('main.upload_audit') }}" method="post" enctype="multipart/form-data" class="upload-form">
+                    {{ audit_form.hidden_tag() }}
+                    <div class="form-group">
+                        {{ audit_form.audit_file(class="file-input") }}
+                        <label for="audit_file" class="file-label">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>Choose PDF file</span>
+                        </label>
+                    </div>
+                    {{ audit_form.submit(class="btn btn-primary") }}
+                </form>
+                
+                {% if requirements.audit_uploaded %}
+                <div class="upload-status success">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Last updated: {{ requirements.last_updated.strftime('%m/%d/%Y') }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="audit-help">
+                    <p><strong>How to get your audit:</strong></p>
+                    <ol>
+                        <li>Visit <a href="https://registrar.illinois.edu/academic-records/dars-audit/" target="_blank">UIUC Degree Audit</a></li>
+                        <li>Generate your audit report</li>
+                        <li>Download as PDF and upload here</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- General Education Requirements -->
+        <div class="dashboard-card full-width">
+            <h2><i class="fas fa-graduation-cap"></i> General Education Requirements</h2>
+            
+            {% if not requirements.audit_uploaded %}
+            <div class="no-audit-message">
+                <i class="fas fa-info-circle"></i>
+                <p>Upload your degree audit PDF to see your requirement status.</p>
+            </div>
+            {% else %}
+            <div class="requirements-grid">
+                <!-- Core Requirements -->
+                <div class="requirement-category">
+                    <h3>Core Requirements</h3>
+                    <div class="requirement-list">
+                        <div class="requirement-item {{ 'completed' if requirements.composition1 }}">
+                            <span class="status-icon">
+                                {% if requirements.composition1 %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>University Composition I</span>
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.advanced_composition }}">
+                            <span class="status-icon">
+                                {% if requirements.advanced_composition %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Advanced Composition</span>
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.quantitative_reasoning1 }}">
+                            <span class="status-icon">
+                                {% if requirements.quantitative_reasoning1 %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Quantitative Reasoning I</span>
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.quantitative_reasoning2 }}">
+                            <span class="status-icon">
+                                {% if requirements.quantitative_reasoning2 %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Quantitative Reasoning II</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cultural Studies -->
+                <div class="requirement-category">
+                    <h3>Cultural Studies</h3>
+                    <div class="requirement-list">
+                        <div class="requirement-item {{ 'completed' if requirements.western_culture }}">
+                            <span class="status-icon">
+                                {% if requirements.western_culture %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Western/Comparative Culture</span>
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.non_western_culture }}">
+                            <span class="status-icon">
+                                {% if requirements.non_western_culture %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Non-Western Culture</span>
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.us_minority_culture }}">
+                            <span class="status-icon">
+                                {% if requirements.us_minority_culture %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>US Minority Culture</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- General Education Categories -->
+                <div class="requirement-category">
+                    <h3>General Education</h3>
+                    <div class="requirement-list">
+                        <div class="requirement-item {{ 'completed' if requirements.humanities_arts }}">
+                            <span class="status-icon">
+                                {% if requirements.humanities_arts %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Humanities & Arts</span>
+                            {% if requirements.humanities_arts %}
+                            <div class="subcategories">
+                                <span class="sub-item {{ 'completed' if requirements.humanities_hp }}">HP</span>
+                                <span class="sub-item {{ 'completed' if requirements.humanities_la }}">LA</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.social_behavioral }}">
+                            <span class="status-icon">
+                                {% if requirements.social_behavioral %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Social & Behavioral Science</span>
+                            {% if requirements.social_behavioral %}
+                            <div class="subcategories">
+                                <span class="sub-item {{ 'completed' if requirements.social_behavioral_bsc }}">BSC</span>
+                                <span class="sub-item {{ 'completed' if requirements.social_behavioral_ss }}">SS</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="requirement-item {{ 'completed' if requirements.natural_sciences }}">
+                            <span class="status-icon">
+                                {% if requirements.natural_sciences %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Natural Sciences & Technology</span>
+                            {% if requirements.natural_sciences %}
+                            <div class="subcategories">
+                                <span class="sub-item {{ 'completed' if requirements.natural_sciences_ls }}">LS</span>
+                                <span class="sub-item {{ 'completed' if requirements.natural_sciences_ps }}">PS</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Language Requirement -->
+                <div class="requirement-category">
+                    <h3>Language</h3>
+                    <div class="requirement-list">
+                        <div class="requirement-item {{ 'completed' if requirements.language_requirement }}">
+                            <span class="status-icon">
+                                {% if requirements.language_requirement %}<i class="fas fa-check"></i>
+                                {% else %}<i class="fas fa-times"></i>{% endif %}
+                            </span>
+                            <span>Language Requirement</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// File input styling
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('.file-input');
+    const fileLabel = document.querySelector('.file-label');
+    
+    if (fileInput && fileLabel) {
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                fileLabel.querySelector('span').textContent = this.files[0].name;
+            } else {
+                fileLabel.querySelector('span').textContent = 'Choose PDF file';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
