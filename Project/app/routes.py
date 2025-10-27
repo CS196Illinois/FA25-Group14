@@ -9,23 +9,14 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from google import genai
+import google.generativeai as genai
 from google.genai import types
 import os
-from app.models import Review
-from flask_login import current_user
-from app.forms import LoginForm
-from app.models import User, db
-from app.forms import RegisterForm
-from app.models import User, db
-from app.forms import ReviewForm
-from app.models import Review, db
-from app.forms import EditReviewForm
-from app.models import Review, db
-from app.models import Review, db
+
+from app.models import db, User, Review, UserRequirements
+from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
 
 from datetime import datetime
-from app.models import db, UserRequirements
 
 bp = Blueprint('main', __name__)
 
@@ -35,7 +26,7 @@ _GENED_SPLIT = re.compile(r'[;,]')
 
 CourseRecord = Dict[str, str]
 
-
+# lru_cache decorated from ChatGPT suggestion
 @lru_cache(maxsize=1)
 def _load_courses() -> List[CourseRecord]:
     courses: List[CourseRecord] = []
