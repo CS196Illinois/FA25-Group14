@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types
 import os
 
-from app.models import db, User, Review, UserRequirements
+from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
 
 from datetime import datetime
@@ -587,3 +587,96 @@ def change_password():
             flash('Current password is incorrect', 'error')
     
     return render_template('auth/change_password.html', form=form)
+
+# Messaging routes
+@bp.route('/api/messages/<course_code>', methods=['GET'])
+@login_required
+def get_messages(course_code):
+    """Get messages for a specific course"""
+    try:
+        # Get messages, newest first, limit to last 100
+        messages = Message.query.filter_by(
+            course_code=course_code,
+            is_deleted=False
+        ).order_by(Message.created_at.desc()).limit(100).all()
+        
+        # Reverse to show oldest first in chat
+        messages.reverse()
+        
+        return jsonify({
+            'messages': [{
+                'id': msg.id,
+                'content': msg.content,
+                'author_name': msg.author.name,
+                'author_id': msg.author.id,
+                'created_at': msg.created_at.isoformat(),
+                'time_ago': msg.time_ago,
+                'is_own': msg.user_id == current_user.id
+            } for msg in messages]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/messages/<course_code>', methods=['POST'])
+@login_required
+def send_message(course_code):
+    """Send a message to a course chat"""
+    try:
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        
+        if not content:
+            return jsonify({'error': 'Message content cannot be empty'}), 400
+        
+        if len(content) > 1000:
+            return jsonify({'error': 'Message too long (max 1000 characters)'}), 400
+        
+        # Verify course exists
+        courses = _load_courses()
+        course = next((c for c in courses if c['course_code'] == course_code), None)
+        if not course:
+            return jsonify({'error': 'Course not found'}), 404
+        
+        # Create message
+        message = Message(
+            course_code=course_code,
+            user_id=current_user.id,
+            content=content
+        )
+        
+        db.session.add(message)
+        db.session.commit()
+        
+        return jsonify({
+            'message': {
+                'id': message.id,
+                'content': message.content,
+                'author_name': message.author.name,
+                'author_id': message.author.id,
+                'created_at': message.created_at.isoformat(),
+                'time_ago': message.time_ago,
+                'is_own': True
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/messages/<int:message_id>', methods=['DELETE'])
+@login_required
+def delete_message(message_id):
+    """Delete own message"""
+    try:
+        message = Message.query.get_or_404(message_id)
+        
+        # Only allow user to delete their own messages
+        if message.user_id != current_user.id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        message.is_deleted = True
+        db.session.commit()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

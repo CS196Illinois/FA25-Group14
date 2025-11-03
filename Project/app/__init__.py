@@ -1,8 +1,7 @@
 from flask import Flask
 from flask_login import LoginManager
 from flask_migrate import Migrate
-from app.models import db, User, Review, UserRequirements
-from app.models import db, User
+from app.models import db, User, Review, UserRequirements, Message
 import os
 import secrets
 
@@ -32,6 +31,7 @@ def create_app():
     
     # Initialize extensions
     db.init_app(app)
+    migrate = Migrate(app, db)
     
     # Setup Flask-Login
     login_manager = LoginManager()
