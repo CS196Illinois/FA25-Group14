@@ -16,6 +16,9 @@ class User(UserMixin, db.Model):
     # Relationship to reviews
     reviews = db.relationship('Review', backref='author', lazy=True, cascade='all, delete-orphan')
     
+    # Relationship to messages
+    messages = db.relationship('Message', backref='author', lazy=True, cascade='all, delete-orphan')
+    
     def __repr__(self):
         return f'<User {self.email}>'
     
@@ -102,6 +105,46 @@ class Review(db.Model):
     def workload_text(self):
         levels = {1: 'Very Light', 2: 'Light', 3: 'Moderate', 4: 'Heavy', 5: 'Very Heavy'}
         return levels.get(self.workload, 'Unknown')
+    
+    @property
+    def time_ago(self):
+        now = datetime.utcnow()
+        diff = now - self.created_at
+        
+        if diff.days > 365:
+            years = diff.days // 365
+            return f"{years} year{'s' if years > 1 else ''} ago"
+        elif diff.days > 30:
+            months = diff.days // 30
+            return f"{months} month{'s' if months > 1 else ''} ago"
+        elif diff.days > 0:
+            return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+        elif diff.seconds > 3600:
+            hours = diff.seconds // 3600
+            return f"{hours} hour{'s' if hours > 1 else ''} ago"
+        elif diff.seconds > 60:
+            minutes = diff.seconds // 60
+            return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        else:
+            return "Just now"
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_code = db.Column(db.String(20), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Message content
+    content = db.Column(db.Text, nullable=False)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Moderation
+    is_flagged = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f'<Message {self.id} in {self.course_code} by {self.author.name}>'
     
     @property
     def time_ago(self):

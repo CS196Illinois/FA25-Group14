@@ -252,5 +252,234 @@ course.course_name }}{% endblock %} {% block content %}
       </div>
     </aside>
   </div>
+
+  <!-- Course Chat Section -->
+  {% if current_user.is_authenticated %}
+  <div class="course-chat-section">
+    <div class="chat-header">
+      <h3>Course Discussion</h3>
+      <p class="chat-subtitle">Chat with other students taking {{ course.course_code }}</p>
+    </div>
+    
+    <div class="chat-container" id="chat-container">
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-loading">
+          <div class="loading-spinner"></div>
+          <p>Loading messages...</p>
+        </div>
+      </div>
+      
+      <div class="chat-input-container">
+        <form id="chat-form" class="chat-form">
+          <input 
+            type="text" 
+            id="chat-input" 
+            class="chat-input" 
+            placeholder="Type a message..." 
+            maxlength="1000"
+            autocomplete="off"
+            required
+          />
+          <button type="submit" class="btn btn-primary chat-send-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            Send
+          </button>
+        </form>
+        <p class="chat-hint">Press Enter to send • Messages are visible to all students</p>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="course-chat-section">
+    <div class="chat-login-prompt">
+      <h3>Course Discussion</h3>
+      <p>Please <a href="{{ url_for('main.login') }}">log in</a> to join the conversation about {{ course.course_code }}</p>
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+<script>
+// Chat functionality
+{% if current_user.is_authenticated %}
+const COURSE_CODE = "{{ course.course_code }}";
+const CURRENT_USER_ID = {{ current_user.id }};
+const chatMessages = document.getElementById('chat-messages');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
+let lastMessageId = 0;
+let isLoadingMessages = false;
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function createMessageElement(msg) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${msg.is_own ? 'chat-message-own' : ''}`;
+  messageDiv.dataset.messageId = msg.id;
+  
+  const deleteBtn = msg.is_own ? 
+    `<button class="message-delete-btn" onclick="deleteMessage(${msg.id})" title="Delete message">×</button>` : '';
+  
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span class="message-author">${escapeHtml(msg.author_name)}</span>
+      <span class="message-time">${escapeHtml(msg.time_ago)}</span>
+      ${deleteBtn}
+    </div>
+    <div class="message-content">${escapeHtml(msg.content)}</div>
+  `;
+  
+  return messageDiv;
+}
+
+async function loadMessages() {
+  if (isLoadingMessages) return;
+  isLoadingMessages = true;
+  
+  try {
+    const response = await fetch(`/api/messages/${COURSE_CODE}`);
+    if (!response.ok) throw new Error('Failed to load messages');
+    
+    const data = await response.json();
+    
+    // Clear loading state
+    chatMessages.innerHTML = '';
+    
+    if (data.messages.length === 0) {
+      chatMessages.innerHTML = '<div class="chat-empty">No messages yet. Be the first to start the conversation!</div>';
+    } else {
+      data.messages.forEach(msg => {
+        chatMessages.appendChild(createMessageElement(msg));
+        lastMessageId = Math.max(lastMessageId, msg.id);
+      });
+      
+      // Scroll to bottom
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  } catch (error) {
+    console.error('Error loading messages:', error);
+    chatMessages.innerHTML = '<div class="chat-error">Failed to load messages. Please refresh the page.</div>';
+  } finally {
+    isLoadingMessages = false;
+  }
+}
+
+async function sendMessage(content) {
+  try {
+    const response = await fetch(`/api/messages/${COURSE_CODE}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to send message');
+    }
+    
+    const data = await response.json();
+    
+    // Remove empty state if exists
+    const emptyState = chatMessages.querySelector('.chat-empty');
+    if (emptyState) {
+      emptyState.remove();
+    }
+    
+    // Add new message
+    chatMessages.appendChild(createMessageElement(data.message));
+    lastMessageId = Math.max(lastMessageId, data.message.id);
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Clear input
+    chatInput.value = '';
+  } catch (error) {
+    console.error('Error sending message:', error);
+    alert(error.message || 'Failed to send message');
+  }
+}
+
+async function deleteMessage(messageId) {
+  if (!confirm('Are you sure you want to delete this message?')) return;
+  
+  try {
+    const response = await fetch(`/api/messages/${messageId}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) throw new Error('Failed to delete message');
+    
+    // Remove message from UI
+    const messageElement = chatMessages.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+      messageElement.remove();
+    }
+    
+    // Check if chat is now empty
+    if (chatMessages.children.length === 0) {
+      chatMessages.innerHTML = '<div class="chat-empty">No messages yet. Be the first to start the conversation!</div>';
+    }
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    alert('Failed to delete message');
+  }
+}
+
+// Event listeners
+chatForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const content = chatInput.value.trim();
+  if (content) {
+    sendMessage(content);
+  }
+});
+
+// Auto-refresh messages every 5 seconds
+setInterval(async () => {
+  if (document.hidden || isLoadingMessages) return;
+  
+  try {
+    const response = await fetch(`/api/messages/${COURSE_CODE}`);
+    if (!response.ok) return;
+    
+    const data = await response.json();
+    
+    // Only add new messages (don't reload all)
+    const newMessages = data.messages.filter(msg => msg.id > lastMessageId);
+    
+    newMessages.forEach(msg => {
+      // Remove empty state if exists
+      const emptyState = chatMessages.querySelector('.chat-empty');
+      if (emptyState) {
+        emptyState.remove();
+      }
+      
+      chatMessages.appendChild(createMessageElement(msg));
+      lastMessageId = Math.max(lastMessageId, msg.id);
+    });
+    
+    // Auto-scroll if user is near bottom
+    const isNearBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 100;
+    if (newMessages.length > 0 && isNearBottom) {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  } catch (error) {
+    console.error('Error refreshing messages:', error);
+  }
+}, 5000);
+
+// Initial load
+loadMessages();
+{% endif %}
+</script>
 {% endblock %}
