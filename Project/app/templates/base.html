@@ -38,6 +38,10 @@
           {% else %}
           <a href="{{ url_for('main.login') }}" class="btn btn-ghost btn-sm">Log In</a>
           <a href="{{ url_for('main.register') }}" class="btn btn-primary btn-sm">Sign Up</a>
+          <div class="theme-toggle-wrapper">
+            <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">🌙</button>
+            <span class="theme-label">Dark / Light</span>
+          </div>
           {% endif %}
         </div>
       </div>
@@ -64,6 +68,20 @@
         </p>
       </div>
     </footer>
+    <script>
+      const btn = document.getElementById('theme-toggle');
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      document.body.classList.toggle('dark', savedTheme === 'dark');
+      btn.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+
+      btn.onclick = () => {
+        document.body.classList.toggle('dark');
+        const newTheme = document.body.classList.contains('dark') ? 'dark' : 'light';
+        localStorage.setItem('theme', newTheme);
+        btn.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+      };
+    </script>
+
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   </body>
 </html>
