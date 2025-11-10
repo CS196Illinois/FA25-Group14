@@ -193,14 +193,17 @@ def course_detail(course_code):
             user_id=current_user.id
         ).first()
     
-    return render_template('course_detail.html', 
-                         course=course, 
+    gpa_stats = get_course_gpa_stats(course_code)
+
+    return render_template('course_detail.html',
+                         course=course,
                          related_courses=related_courses,
                          reviews=reviews_data,
                          avg_rating=avg_rating,
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
-                         user_review=user_review)
+                         user_review=user_review,
+                         gpa_stats=gpa_stats)
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])
