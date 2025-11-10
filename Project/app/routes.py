@@ -16,6 +16,7 @@ import os
 from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
 from app.utils.gpa_calculator import get_course_gpa_stats
+from app import super as sb
 
 from datetime import datetime
 
@@ -171,21 +172,18 @@ def course_detail(course_code):
         if c['department'] == course['department'] and c['course_code'] != course_code
     ][:4]  # Limit to 4 related courses
     
-    # Get reviews for this course
-    reviews = Review.query.filter_by(
-        course_code=course_code, 
-        is_approved=True
-    ).order_by(Review.created_at.desc()).all()
+    # Get reviews for this course using Supabase
+    reviews_data = sb.get_reviews_by_course(course_code, approved_only=True)
     
     # Calculate average ratings
     avg_rating = 0
     avg_difficulty = 0
     avg_workload = 0
     
-    if reviews:
-        avg_rating = sum(r.rating for r in reviews) / len(reviews)
-        avg_difficulty = sum(r.difficulty for r in reviews) / len(reviews)
-        avg_workload = sum(r.workload for r in reviews) / len(reviews)
+    if reviews_data:
+        avg_rating = sum(r['rating'] for r in reviews_data) / len(reviews_data)
+        avg_difficulty = sum(r['difficulty'] for r in reviews_data) / len(reviews_data)
+        avg_workload = sum(r['workload'] for r in reviews_data) / len(reviews_data)
     
     # Check if current user has already reviewed this course
     user_review = None
@@ -194,19 +192,18 @@ def course_detail(course_code):
             course_code=course_code,
             user_id=current_user.id
         ).first()
-
-    #fetch gpa data
+    
     gpa_stats = get_course_gpa_stats(course_code)
 
     return render_template('course_detail.html',
                          course=course,
                          related_courses=related_courses,
-                         reviews=reviews,
+                         reviews=reviews_data,
                          avg_rating=avg_rating,
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
                          user_review=user_review,
-                         gpa_stats=gpa_stats) #now acccessible
+                         gpa_stats=gpa_stats)
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])
@@ -218,8 +215,11 @@ def login():
     
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data.lower()).first()
-        if user and check_password_hash(user.password_hash, form.password.data):
+        # Use Supabase function to get user
+        user_data = sb.get_user_by_email(form.email.data.lower())
+        if user_data and check_password_hash(user_data['password_hash'], form.password.data):
+            # Load user object for Flask-Login
+            user = User.query.filter_by(email=form.email.data.lower()).first()
             login_user(user, remember=True)
             next_page = request.args.get('next')
             if not next_page or not next_page.startswith('/'):
@@ -240,24 +240,27 @@ def register():
     
     form = RegisterForm()
     if form.validate_on_submit():
-        # Check if user already exists
-        existing_user = User.query.filter_by(email=form.email.data.lower()).first()
+        # Check if user already exists using Supabase
+        existing_user = sb.get_user_by_email(form.email.data.lower())
         if existing_user:
             flash('An account with this email already exists', 'error')
             return render_template('auth/register.html', form=form)
         
-        # Create new user
-        user = User(
+        # Create new user in Supabase
+        user_data = sb.create_user(
             name=form.name.data,
             email=form.email.data.lower(),
             password_hash=generate_password_hash(form.password.data)
         )
-        db.session.add(user)
-        db.session.commit()
         
-        login_user(user, remember=True)
-        flash('Welcome to Course Compass! Your account has been created.', 'success')
-        return redirect(url_for('main.index'))
+        if user_data:
+            # Load user object for Flask-Login
+            user = User.query.filter_by(email=form.email.data.lower()).first()
+            login_user(user, remember=True)
+            flash('Welcome to Course Compass! Your account has been created.', 'success')
+            return redirect(url_for('main.index'))
+        else:
+            flash('An error occurred while creating your account', 'error')
     
     return render_template('auth/register.html', form=form)
 
@@ -281,11 +284,8 @@ def add_review(course_code):
         flash('Course not found', 'error')
         return redirect(url_for('main.index'))
     
-    # Check if user already reviewed this course
-    existing_review = Review.query.filter_by(
-        course_code=course_code,
-        user_id=current_user.id
-    ).first()
+    # Check if user already reviewed this course using Supabase
+    existing_review = sb.get_user_review_for_course(current_user.id, course_code)
     
     if existing_review:
         flash('You have already reviewed this course. You can edit your existing review.', 'info')
@@ -293,7 +293,8 @@ def add_review(course_code):
     
     form = ReviewForm()
     if form.validate_on_submit():
-        review = Review(
+        # Create review using Supabase
+        review_data = sb.create_review(
             course_code=course_code,
             user_id=current_user.id,
             rating=int(form.rating.data),
@@ -305,11 +306,12 @@ def add_review(course_code):
             professor=form.professor.data or None,
             grade_received=form.grade_received.data or None
         )
-        db.session.add(review)
-        db.session.commit()
         
-        flash('Your review has been submitted! Thank you for helping other students.', 'success')
-        return redirect(url_for('main.course_detail', course_code=course_code))
+        if review_data:
+            flash('Your review has been submitted! Thank you for helping other students.', 'success')
+            return redirect(url_for('main.course_detail', course_code=course_code))
+        else:
+            flash('An error occurred while submitting your review', 'error')
     
     return render_template('reviews/add_review.html', form=form, course=course)
 
@@ -318,28 +320,44 @@ def add_review(course_code):
 def edit_review(course_code):
 
     
-    review = Review.query.filter_by(
-        course_code=course_code,
-        user_id=current_user.id
-    ).first()
+    # Get review using Supabase
+    review_data = sb.get_user_review_for_course(current_user.id, course_code)
     
-    if not review:
+    if not review_data:
         flash('Review not found', 'error')
         return redirect(url_for('main.course_detail', course_code=course_code))
     
     courses = _load_courses()
     course = next((c for c in courses if c['course_code'] == course_code), None)
     
+    # Create a mock review object for the form
+    class ReviewObj:
+        def __init__(self, data):
+            for key, value in data.items():
+                setattr(self, key, value)
+    
+    review = ReviewObj(review_data)
     form = EditReviewForm(obj=review)
+    
     if form.validate_on_submit():
-        form.populate_obj(review)
-        review.rating = int(form.rating.data)
-        review.difficulty = int(form.difficulty.data) 
-        review.workload = int(form.workload.data)
-        db.session.commit()
+        # Update review using Supabase
+        success = sb.update_review(
+            review_id=review_data['id'],
+            rating=int(form.rating.data),
+            difficulty=int(form.difficulty.data),
+            workload=int(form.workload.data),
+            title=form.title.data,
+            comment=form.comment.data,
+            semester_taken=form.semester_taken.data or None,
+            professor=form.professor.data or None,
+            grade_received=form.grade_received.data or None
+        )
         
-        flash('Your review has been updated', 'success')
-        return redirect(url_for('main.course_detail', course_code=course_code))
+        if success:
+            flash('Your review has been updated', 'success')
+            return redirect(url_for('main.course_detail', course_code=course_code))
+        else:
+            flash('An error occurred while updating your review', 'error')
     
     return render_template('reviews/edit_review.html', form=form, course=course, review=review)
 
@@ -347,15 +365,15 @@ def edit_review(course_code):
 @login_required
 def delete_review(course_code):
     
-    review = Review.query.filter_by(
-        course_code=course_code,
-        user_id=current_user.id
-    ).first()
+    # Get review using Supabase
+    review_data = sb.get_user_review_for_course(current_user.id, course_code)
     
-    if review:
-        db.session.delete(review)
-        db.session.commit()
-        flash('Your review has been deleted', 'info')
+    if review_data:
+        success = sb.delete_review(review_data['id'])
+        if success:
+            flash('Your review has been deleted', 'info')
+        else:
+            flash('An error occurred while deleting your review', 'error')
     else:
         flash('Review not found', 'error')
     
@@ -599,26 +617,46 @@ def change_password():
 def get_messages(course_code):
     """Get messages for a specific course"""
     try:
-        # Get messages, newest first, limit to last 100
-        messages = Message.query.filter_by(
-            course_code=course_code,
-            is_deleted=False
-        ).order_by(Message.created_at.desc()).limit(100).all()
+        # Get messages using Supabase
+        messages_data = sb.get_messages_by_course(course_code, limit=100)
         
-        # Reverse to show oldest first in chat
-        messages.reverse()
+        # Format response with time_ago calculation
+        from app.models import Message
+        messages_formatted = []
+        for msg in messages_data:
+            # Calculate time_ago
+            created_at = datetime.fromisoformat(msg['created_at'].replace('Z', '+00:00'))
+            now = datetime.utcnow()
+            diff = now - created_at.replace(tzinfo=None)
+            
+            if diff.days > 365:
+                years = diff.days // 365
+                time_ago = f"{years} year{'s' if years > 1 else ''} ago"
+            elif diff.days > 30:
+                months = diff.days // 30
+                time_ago = f"{months} month{'s' if months > 1 else ''} ago"
+            elif diff.days > 0:
+                time_ago = f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+            elif diff.seconds > 3600:
+                hours = diff.seconds // 3600
+                time_ago = f"{hours} hour{'s' if hours > 1 else ''} ago"
+            elif diff.seconds > 60:
+                minutes = diff.seconds // 60
+                time_ago = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+            else:
+                time_ago = "Just now"
+            
+            messages_formatted.append({
+                'id': msg['id'],
+                'content': msg['content'],
+                'author_name': msg['author']['name'] if msg.get('author') else 'Unknown',
+                'author_id': msg['user_id'],
+                'created_at': msg['created_at'],
+                'time_ago': time_ago,
+                'is_own': msg['user_id'] == current_user.id
+            })
         
-        return jsonify({
-            'messages': [{
-                'id': msg.id,
-                'content': msg.content,
-                'author_name': msg.author.name,
-                'author_id': msg.author.id,
-                'created_at': msg.created_at.isoformat(),
-                'time_ago': msg.time_ago,
-                'is_own': msg.user_id == current_user.id
-            } for msg in messages]
-        })
+        return jsonify({'messages': messages_formatted})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -642,29 +680,24 @@ def send_message(course_code):
         if not course:
             return jsonify({'error': 'Course not found'}), 404
         
-        # Create message
-        message = Message(
-            course_code=course_code,
-            user_id=current_user.id,
-            content=content
-        )
+        # Create message using Supabase
+        message_data = sb.create_message(course_code, current_user.id, content)
         
-        db.session.add(message)
-        db.session.commit()
-        
-        return jsonify({
-            'message': {
-                'id': message.id,
-                'content': message.content,
-                'author_name': message.author.name,
-                'author_id': message.author.id,
-                'created_at': message.created_at.isoformat(),
-                'time_ago': message.time_ago,
-                'is_own': True
-            }
-        }), 201
+        if message_data:
+            return jsonify({
+                'message': {
+                    'id': message_data['id'],
+                    'content': message_data['content'],
+                    'author_name': message_data['author']['name'] if message_data.get('author') else current_user.name,
+                    'author_id': message_data['user_id'],
+                    'created_at': message_data['created_at'],
+                    'time_ago': 'Just now',
+                    'is_own': True
+                }
+            }), 201
+        else:
+            return jsonify({'error': 'Failed to create message'}), 500
     except Exception as e:
-        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @bp.route('/api/messages/<int:message_id>', methods=['DELETE'])
