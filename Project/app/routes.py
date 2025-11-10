@@ -15,6 +15,7 @@ import os
 
 from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
+from app.utils.gpa_calculator import get_course_gpa_stats
 
 from datetime import datetime
 
@@ -166,9 +167,9 @@ def course_detail(course_code):
     
     # Find related courses in same department
     related_courses = [
-        c for c in courses 
+        c for c in courses
         if c['department'] == course['department'] and c['course_code'] != course_code
-    ][:6]  # Limit to 6 related courses
+    ][:4]  # Limit to 4 related courses
     
     # Get reviews for this course
     reviews = Review.query.filter_by(
@@ -193,15 +194,19 @@ def course_detail(course_code):
             course_code=course_code,
             user_id=current_user.id
         ).first()
-    
-    return render_template('course_detail.html', 
-                         course=course, 
+
+    #fetch gpa data
+    gpa_stats = get_course_gpa_stats(course_code)
+
+    return render_template('course_detail.html',
+                         course=course,
                          related_courses=related_courses,
                          reviews=reviews,
                          avg_rating=avg_rating,
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
-                         user_review=user_review)
+                         user_review=user_review,
+                         gpa_stats=gpa_stats) #now acccessible
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])
