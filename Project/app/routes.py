@@ -20,7 +20,6 @@ import requests
 from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
 from app.utils.gpa_calculator import get_course_gpa_stats
-from app import super as sb
 
 from datetime import datetime
 
@@ -236,19 +235,23 @@ def course_detail(course_code):
     # Check if current user has already reviewed this course
     user_review = None
     if current_user.is_authenticated:
-        user_review = sb.get_user_review_for_course(current_user.id, course_code)
-    
+        user_review = Review.query.filter_by(
+            course_code=course_code,
+            user_id=current_user.id
+        ).first()
+
+    #fetch gpa data
     gpa_stats = get_course_gpa_stats(course_code)
 
-    return render_template('course_detail.html', 
-                         course=course, 
+    return render_template('course_detail.html',
+                         course=course,
                          related_courses=related_courses,
                          reviews=reviews_data,
                          avg_rating=avg_rating,
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
                          user_review=user_review,
-                         gpa_stats=gpa_stats) 
+                         gpa_stats=gpa_stats) #now acccessible
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])

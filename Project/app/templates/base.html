@@ -38,11 +38,11 @@
           {% else %}
           <a href="{{ url_for('main.login') }}" class="btn btn-ghost btn-sm">Log In</a>
           <a href="{{ url_for('main.register') }}" class="btn btn-primary btn-sm">Sign Up</a>
+          {% endif %}
           <div class="theme-toggle-wrapper">
             <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">🌙</button>
             <span class="theme-label">Dark / Light</span>
           </div>
-          {% endif %}
         </div>
       </div>
     </header>
