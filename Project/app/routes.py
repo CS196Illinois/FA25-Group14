@@ -188,10 +188,11 @@ def course_detail(course_code):
     # Check if current user has already reviewed this course
     user_review = None
     if current_user.is_authenticated:
-        user_review = sb.get_user_review_for_course(current_user.id, course_code)
+        user_review = Review.query.filter_by(
+            course_code=course_code,
+            user_id=current_user.id
+        ).first()
     
-    gpa_stats = get_course_gpa_stats(course_code)
-
     return render_template('course_detail.html', 
                          course=course, 
                          related_courses=related_courses,
@@ -199,8 +200,7 @@ def course_detail(course_code):
                          avg_rating=avg_rating,
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
-                         user_review=user_review,
-                         gpa_stats=gpa_stats) 
+                         user_review=user_review)
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])
