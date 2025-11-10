@@ -5,6 +5,7 @@ from app.models import db, User, Review, UserRequirements, Message
 import os
 import secrets
 
+# Put some boilerplate code to create app
 def create_app():
     app = Flask(__name__)
     
