@@ -239,8 +239,7 @@ def course_detail(course_code):
             course_code=course_code,
             user_id=current_user.id
         ).first()
-
-    #fetch gpa data
+    
     gpa_stats = get_course_gpa_stats(course_code)
 
     return render_template('course_detail.html',
@@ -251,7 +250,7 @@ def course_detail(course_code):
                          avg_difficulty=avg_difficulty,
                          avg_workload=avg_workload,
                          user_review=user_review,
-                         gpa_stats=gpa_stats) #now acccessible
+                         gpa_stats=gpa_stats)
 
 # Authentication routes
 @bp.route('/login', methods=['GET', 'POST'])

@@ -19,8 +19,8 @@ GRADE_VALUES = {
     'F': 0.0
 }
 
-GPA_DATA_PATH = Path(__file__).resolve().parent.parent / 'gpa_data.csv'
-
+GPA_DATA_PATH = Path("./app/gpa_data.csv")
+print(f"GPA data path: {GPA_DATA_PATH}")
 
 @lru_cache(maxsize=1)
 def load_gpa_data() -> List[Dict]:
