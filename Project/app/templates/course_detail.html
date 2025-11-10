@@ -9,34 +9,34 @@ course.course_name }}{% endblock %} {% block content %}
     </ol>
   </nav>
 
-  <header class="course-header">
-    <div class="course-title-block">
-      <h1>{{ course.course_code }}</h1>
-      <h2>{{ course.course_name }}</h2>
-      <div class="course-badges">
-        <span class="badge badge-primary"
-          >{{ course.credit_hours or 'N/A' }} Credit Hours</span
-        >
-        <span class="badge badge-secondary"
-          >{{ course.department or 'Unknown Dept' }}</span
-        >
-        {% if course.gen_ed_requirements %}
-
-        <div class="gened-list">
-          {% set geneds = course.gen_ed_requirements.split(';') if ';' in
-          course.gen_ed_requirements else course.gen_ed_requirements.split(',')
-          %} {% for gened in geneds %} {% if gened.strip() %}
-          <span class="badge badge-gened">{{ gened.strip() }}</span>
-          {% endif %} {% endfor %}
-        </div>
-
-        {% endif %}
-      </div>
-    </div>
-  </header>
-
   <div class="course-content">
     <section class="course-main">
+      <header class="course-header">
+        <div class="course-title-block">
+          <h1>{{ course.course_code }}</h1>
+          <h2>{{ course.course_name }}</h2>
+          <div class="course-badges">
+            <span class="badge badge-primary"
+              >{{ course.credit_hours or 'N/A' }} Credit Hours</span
+            >
+            <span class="badge badge-secondary"
+              >{{ course.department or 'Unknown Dept' }}</span
+            >
+            {% if course.gen_ed_requirements %}
+
+            <div class="gened-list">
+              {% set geneds = course.gen_ed_requirements.split(';') if ';' in
+              course.gen_ed_requirements else course.gen_ed_requirements.split(',')
+              %} {% for gened in geneds %} {% if gened.strip() %}
+              <span class="badge badge-gened">{{ gened.strip() }}</span>
+              {% endif %} {% endfor %}
+            </div>
+
+            {% endif %}
+          </div>
+        </div>
+      </header>
+
       <div class="course-section">
         <h3>Course Description</h3>
         <div class="course-description">
@@ -175,12 +175,110 @@ course.course_name }}{% endblock %} {% block content %}
         </div>
         {% endif %}
       </div>
+
+      <!-- Course Chat Section -->
+      {% if current_user.is_authenticated %}
+      <div class="course-chat-section">
+        <div class="chat-header">
+          <h3>Course Discussion</h3>
+          <p class="chat-subtitle">Chat with other students taking {{ course.course_code }}</p>
+        </div>
+
+        <div class="chat-container" id="chat-container">
+          <div class="chat-messages" id="chat-messages">
+            <div class="chat-loading">
+              <div class="loading-spinner"></div>
+              <p>Loading messages...</p>
+            </div>
+          </div>
+
+          <div class="chat-input-container">
+            <form id="chat-form" class="chat-form">
+              <input
+                type="text"
+                id="chat-input"
+                class="chat-input"
+                placeholder="Type a message..."
+                maxlength="1000"
+                autocomplete="off"
+                required
+              />
+              <button type="submit" class="btn btn-primary chat-send-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                Send
+              </button>
+            </form>
+            <p class="chat-hint">Press Enter to send • Messages are visible to all students</p>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="course-chat-section">
+        <div class="chat-login-prompt">
+          <h3>Course Discussion</h3>
+          <p>Please <a href="{{ url_for('main.login') }}">log in</a> to join the conversation about {{ course.course_code }}</p>
+        </div>
+      </div>
+      {% endif %}
     </section>
 
     <aside class="course-sidebar">
+      {% if gpa_stats %}
+      <div class="stats-section">
+        <h3>GPA Statistics</h3>
+        <div class="course-stats">
+          <div class="stat-item">
+            <span class="stat-label">Overall GPA</span>
+            <span class="stat-value stat-gpa">{{ gpa_stats.overall_gpa }}</span>
+          </div>
+          {% if gpa_stats.recent_gpa %}
+          <div class="stat-item">
+            <span class="stat-label">Recent GPA (Last 3 Terms)</span>
+            <span class="stat-value stat-gpa">{{ gpa_stats.recent_gpa }}</span>
+          </div>
+          {% endif %}
+          <div class="stat-item">
+            <span class="stat-label">Total Students</span>
+            <span class="stat-value">{{ "{:,}".format(gpa_stats.total_students) }}</span>
+          </div>
+        </div>
+
+        {% if gpa_stats.top_professors %}
+        <div class="gpa-professors">
+          <h4>Top Professors</h4>
+          <ul class="professor-list">
+            {% for prof in gpa_stats.top_professors %}
+            <li class="professor-item">
+              <span class="professor-name">{{ prof.name }}</span>
+              <span class="professor-gpa">{{ prof.gpa }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if gpa_stats.recent_semesters %}
+        <div class="gpa-trends">
+          <h4>Recent Semesters</h4>
+          <ul class="semester-list">
+            {% for sem in gpa_stats.recent_semesters %}
+            <li class="semester-item">
+              <span class="semester-name">{{ sem.semester }}</span>
+              <span class="semester-gpa">{{ sem.gpa }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
       {% if reviews %}
       <div class="stats-section">
-        <h3>Course Statistics</h3>
+        <h3>Student Reviews Statistics</h3>
         <div class="course-stats">
           <div class="stat-item">
             <span class="stat-label">Average Rating</span>
@@ -252,54 +350,6 @@ course.course_name }}{% endblock %} {% block content %}
       </div>
     </aside>
   </div>
-
-  <!-- Course Chat Section -->
-  {% if current_user.is_authenticated %}
-  <div class="course-chat-section">
-    <div class="chat-header">
-      <h3>Course Discussion</h3>
-      <p class="chat-subtitle">Chat with other students taking {{ course.course_code }}</p>
-    </div>
-    
-    <div class="chat-container" id="chat-container">
-      <div class="chat-messages" id="chat-messages">
-        <div class="chat-loading">
-          <div class="loading-spinner"></div>
-          <p>Loading messages...</p>
-        </div>
-      </div>
-      
-      <div class="chat-input-container">
-        <form id="chat-form" class="chat-form">
-          <input 
-            type="text" 
-            id="chat-input" 
-            class="chat-input" 
-            placeholder="Type a message..." 
-            maxlength="1000"
-            autocomplete="off"
-            required
-          />
-          <button type="submit" class="btn btn-primary chat-send-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-            Send
-          </button>
-        </form>
-        <p class="chat-hint">Press Enter to send • Messages are visible to all students</p>
-      </div>
-    </div>
-  </div>
-  {% else %}
-  <div class="course-chat-section">
-    <div class="chat-login-prompt">
-      <h3>Course Discussion</h3>
-      <p>Please <a href="{{ url_for('main.login') }}">log in</a> to join the conversation about {{ course.course_code }}</p>
-    </div>
-  </div>
-  {% endif %}
 </div>
 
 <script>
