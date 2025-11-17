@@ -19,19 +19,116 @@
                     <span>{{ current_user.name }}</span>
                 </div>
                 <div class="info-item">
-                    <label>Email:</label>
-                    <span>{{ current_user.email }}</span>
+                    <label>Username:</label>
+                    <span>{{ current_user.username or current_user.netid }}</span>
                 </div>
                 <div class="info-item">
-                    <label>Password:</label>
-                    <span>••••••••</span>
-                    <a href="{{ url_for('main.change_password') }}" class="btn-text">Change Password</a>
+                    <label>NetID:</label>
+                    <span class="netid-value">{{ current_user.netid }}</span>
+                </div>
+                <div class="info-item">
+                    <label>Email:</label>
+                    <span>{{ current_user.email }}</span>
                 </div>
                 <div class="info-item">
                     <label>Member since:</label>
                     <span>{{ current_user.created_at.strftime('%B %d, %Y') }}</span>
                 </div>
             </div>
+        </div>
+
+        <!-- Username Section -->
+        <div class="dashboard-card">
+            <h2><i class="fas fa-id-card"></i> Username</h2>
+            <p class="card-description">Customize your display username. This will be shown on your reviews and posts.</p>
+            <form action="{{ url_for('main.update_username') }}" method="post" class="profile-form">
+                {{ username_form.hidden_tag() }}
+                <div class="form-group">
+                    {{ username_form.username.label(class="form-label") }}
+                    {{ username_form.username(class="form-control", placeholder="Your username") }}
+                    {% if username_form.username.errors %}
+                    <div class="form-errors">
+                        {% for error in username_form.username.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {{ username_form.submit(class="btn btn-primary") }}
+            </form>
+        </div>
+
+        <!-- Password Section -->
+        <div class="dashboard-card">
+            <h2><i class="fas fa-lock"></i> Password</h2>
+            {% if has_password %}
+            <p class="card-description">Update your account password for secure login.</p>
+            <form action="{{ url_for('main.update_password') }}" method="post" class="profile-form">
+                {{ password_form.hidden_tag() }}
+                <div class="form-group">
+                    {{ password_form.current_password.label(class="form-label") }}
+                    {{ password_form.current_password(class="form-control") }}
+                    {% if password_form.current_password.errors %}
+                    <div class="form-errors">
+                        {% for error in password_form.current_password.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ password_form.new_password.label(class="form-label") }}
+                    {{ password_form.new_password(class="form-control") }}
+                    {% if password_form.new_password.errors %}
+                    <div class="form-errors">
+                        {% for error in password_form.new_password.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ password_form.confirm_password.label(class="form-label") }}
+                    {{ password_form.confirm_password(class="form-control") }}
+                    {% if password_form.confirm_password.errors %}
+                    <div class="form-errors">
+                        {% for error in password_form.confirm_password.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {{ password_form.submit(class="btn btn-primary") }}
+            </form>
+            {% else %}
+            <p class="card-description">You signed up with Google. Set a password to enable traditional username/password login.</p>
+            <form action="{{ url_for('main.set_password') }}" method="post" class="profile-form">
+                {{ password_form.hidden_tag() }}
+                <div class="form-group">
+                    {{ password_form.new_password.label(class="form-label") }}
+                    {{ password_form.new_password(class="form-control") }}
+                    {% if password_form.new_password.errors %}
+                    <div class="form-errors">
+                        {% for error in password_form.new_password.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ password_form.confirm_password.label(class="form-label") }}
+                    {{ password_form.confirm_password(class="form-control") }}
+                    {% if password_form.confirm_password.errors %}
+                    <div class="form-errors">
+                        {% for error in password_form.confirm_password.errors %}
+                        <span class="error">{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {{ password_form.submit(class="btn btn-primary") }}
+            </form>
+            {% endif %}
         </div>
 
         <!-- Degree Audit Upload Section -->
@@ -206,8 +303,45 @@
             </div>
             {% endif %}
         </div>
+
+        <!-- Delete Account Section -->
+        <div class="dashboard-card delete-account">
+            <h2><i class="fas fa-exclamation-triangle"></i> Delete Account</h2>
+            <p class="card-description">Once you delete your account, there is no going back. This will permanently delete all your reviews, messages, and account data.</p>
+            <button type="button" class="btn btn-danger" onclick="showDeleteConfirmation()">Delete Account</button>
+        </div>
     </div>
 </div>
+
+<!-- Delete Account Confirmation Modal -->
+<div id="deleteAccountModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Delete Account</h3>
+            <button type="button" class="modal-close" onclick="hideDeleteConfirmation()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p><strong>Are you sure you want to delete your account?</strong></p>
+            <p>This action cannot be undone. All your data will be permanently deleted:</p>
+            <ul>
+                <li>All your course reviews</li>
+                <li>All your course messages</li>
+                <li>Your Gen-Ed progress tracking</li>
+                <li>Your account information</li>
+            </ul>
+            <p>Type <strong>DELETE</strong> to confirm:</p>
+            <form action="{{ url_for('main.delete_account') }}" method="post" id="deleteAccountForm">
+                {{ delete_form.hidden_tag() }}
+                <input type="text" id="deleteConfirmInput" class="form-control" placeholder="Type DELETE" style="margin-bottom: 1rem;">
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideDeleteConfirmation()">Cancel</button>
+                    <button type="submit" class="btn btn-danger" id="confirmDeleteBtn" disabled>Delete My Account</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -216,13 +350,50 @@
 document.addEventListener('DOMContentLoaded', function() {
     const fileInput = document.querySelector('.file-input');
     const fileLabel = document.querySelector('.file-label');
-    
+
     if (fileInput && fileLabel) {
         fileInput.addEventListener('change', function() {
             if (this.files.length > 0) {
                 fileLabel.querySelector('span').textContent = this.files[0].name;
             } else {
                 fileLabel.querySelector('span').textContent = 'Choose PDF file';
+            }
+        });
+    }
+});
+
+// Delete account modal functions
+function showDeleteConfirmation() {
+    document.getElementById('deleteAccountModal').style.display = 'flex';
+    document.getElementById('deleteConfirmInput').value = '';
+    document.getElementById('confirmDeleteBtn').disabled = true;
+}
+
+function hideDeleteConfirmation() {
+    document.getElementById('deleteAccountModal').style.display = 'none';
+}
+
+// Enable delete button only when user types "DELETE"
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmInput = document.getElementById('deleteConfirmInput');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+    if (confirmInput && confirmBtn) {
+        confirmInput.addEventListener('input', function() {
+            if (this.value === 'DELETE') {
+                confirmBtn.disabled = false;
+            } else {
+                confirmBtn.disabled = true;
+            }
+        });
+    }
+
+    // Close modal when clicking outside
+    const modal = document.getElementById('deleteAccountModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                hideDeleteConfirmation();
             }
         });
     }

@@ -150,7 +150,31 @@ class ReviewForm(FlaskForm):
 class EditReviewForm(ReviewForm):
     submit = SubmitField('Update Review')
 
+class UsernameUpdateForm(FlaskForm):
+    """Form for updating username"""
+    username = StringField('Username', validators=[
+        DataRequired(message='Username is required'),
+        Length(min=3, max=50, message='Username must be between 3 and 50 characters')
+    ])
+    submit = SubmitField('Update Username')
+
+class SetPasswordForm(FlaskForm):
+    """Form for setting password (for OAuth users who don't have one yet)"""
+    new_password = PasswordField('New Password', validators=[
+        DataRequired(message='Password is required'),
+        Length(min=6, message='Password must be at least 6 characters')
+    ])
+    confirm_password = PasswordField('Confirm Password', validators=[
+        DataRequired(message='Please confirm your password')
+    ])
+    submit = SubmitField('Set Password')
+
+    def validate_confirm_password(self, field):
+        if field.data != self.new_password.data:
+            raise ValidationError('Passwords must match')
+
 class PasswordUpdateForm(FlaskForm):
+    """Form for changing password (for users who already have one)"""
     current_password = PasswordField('Current Password', validators=[
         DataRequired(message='Current password is required')
     ])
@@ -162,7 +186,7 @@ class PasswordUpdateForm(FlaskForm):
         DataRequired(message='Please confirm your new password')
     ])
     submit = SubmitField('Update Password')
-    
+
     def validate_confirm_password(self, field):
         if field.data != self.new_password.data:
             raise ValidationError('Passwords must match')
@@ -173,3 +197,7 @@ class AuditUploadForm(FlaskForm):
         FileAllowed(['pdf'], 'Only PDF files are allowed!')
     ])
     submit = SubmitField('Upload Audit')
+
+class DeleteAccountForm(FlaskForm):
+    """Simple form for CSRF protection on account deletion"""
+    submit = SubmitField('Delete Account')

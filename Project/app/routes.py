@@ -61,11 +61,15 @@ def get_or_create_user_from_google(user_info):
     if user:
         return user, None
 
+    # Extract netid from email
+    netid = email.split("@")[0]
+
     # Create new user (no password needed for OAuth users)
     user = User(
         email=email.lower(),
-        name=name or email.split("@")[0],
-        password_hash=""  # OAuth users don't need password
+        name=name or netid,
+        username=netid,  # Set username as netid by default
+        password_hash=""  # OAuth users don't need password initially
     )
     db.session.add(user)
     db.session.commit()
@@ -662,22 +666,32 @@ def hello():
 @bp.route('/dashboard')
 @login_required
 def dashboard():
-    from app.forms import PasswordUpdateForm, AuditUploadForm
-    
+    from app.forms import PasswordUpdateForm, SetPasswordForm, UsernameUpdateForm, AuditUploadForm, DeleteAccountForm
+
     # Get or create user requirements
     requirements = UserRequirements.query.filter_by(user_id=current_user.id).first()
     if not requirements:
         requirements = UserRequirements(user_id=current_user.id)
         db.session.add(requirements)
         db.session.commit()
-    
-    password_form = PasswordUpdateForm()
+
+    # Choose appropriate password form based on whether user has password
+    if current_user.has_password:
+        password_form = PasswordUpdateForm()
+    else:
+        password_form = SetPasswordForm()
+
+    username_form = UsernameUpdateForm(username=current_user.username or current_user.netid)
     audit_form = AuditUploadForm()
-    
-    return render_template('dashboard/dashboard.html', 
+    delete_form = DeleteAccountForm()
+
+    return render_template('dashboard/dashboard.html',
                          requirements=requirements,
                          password_form=password_form,
-                         audit_form=audit_form)
+                         username_form=username_form,
+                         audit_form=audit_form,
+                         delete_form=delete_form,
+                         has_password=current_user.has_password)
 
 @bp.route('/upload_audit', methods=['POST'])
 @login_required
@@ -714,15 +728,61 @@ def upload_audit():
     
     return redirect(url_for('main.dashboard'))
 
+@bp.route('/update_username', methods=['POST'])
+@login_required
+def update_username():
+    """Update user's username"""
+    from app.forms import UsernameUpdateForm
+
+    form = UsernameUpdateForm()
+
+    if form.validate_on_submit():
+        new_username = form.username.data.strip()
+
+        # Update username
+        current_user.username = new_username
+        db.session.commit()
+        flash('Your username has been updated successfully!', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{error}', 'error')
+
+    return redirect(url_for('main.dashboard'))
+
+
+@bp.route('/set_password', methods=['POST'])
+@login_required
+def set_password():
+    """Set password for OAuth users who don't have one yet"""
+    from app.forms import SetPasswordForm
+
+    form = SetPasswordForm()
+
+    if form.validate_on_submit():
+        # Set password
+        current_user.password_hash = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Your password has been set successfully! You can now login with your username and password.', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{error}', 'error')
+
+    return redirect(url_for('main.dashboard'))
+
+
 @bp.route('/update_password', methods=['POST'])
 @login_required
 def update_password():
+    """Change password for users who already have one"""
     from app.forms import PasswordUpdateForm
-    
+
     form = PasswordUpdateForm()
+
     if form.validate_on_submit():
         # Verify current password
-        if check_password_hash(current_user.password_hash, form.current_password.data):
+        if current_user.has_password and check_password_hash(current_user.password_hash, form.current_password.data):
             # Update password
             current_user.password_hash = generate_password_hash(form.new_password.data)
             db.session.commit()
@@ -732,29 +792,46 @@ def update_password():
     else:
         for field, errors in form.errors.items():
             for error in errors:
-                flash(f'{getattr(form, field).label.text}: {error}', 'error')
-    
+                flash(f'{error}', 'error')
+
     return redirect(url_for('main.dashboard'))
 
-@bp.route('/change_password', methods=['GET', 'POST'])
+
+@bp.route('/delete_account', methods=['POST'])
 @login_required
-def change_password():
-    from app.forms import PasswordUpdateForm
-    
-    form = PasswordUpdateForm()
-    
-    if form.validate_on_submit():
-        # Verify current password
-        if check_password_hash(current_user.password_hash, form.current_password.data):
-            # Update password
-            current_user.password_hash = generate_password_hash(form.new_password.data)
+def delete_account():
+    """Delete user account and all associated data"""
+    try:
+        user_id = current_user.id
+
+        # Delete all user's reviews
+        Review.query.filter_by(user_id=user_id).delete()
+
+        # Delete all user's messages
+        Message.query.filter_by(user_id=user_id).delete()
+
+        # Delete user requirements
+        UserRequirements.query.filter_by(user_id=user_id).delete()
+
+        # Log out user before deleting account
+        logout_user()
+
+        # Delete the user account
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
             db.session.commit()
-            flash('Your password has been updated successfully!', 'success')
-            return redirect(url_for('main.dashboard'))
+            flash('Your account has been permanently deleted. We\'re sad to see you go!', 'info')
         else:
-            flash('Current password is incorrect', 'error')
-    
-    return render_template('auth/change_password.html', form=form)
+            flash('Account deletion failed. Please try again.', 'error')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting your account: {str(e)}', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    return redirect(url_for('main.index'))
+
 
 # Messaging routes
 @bp.route('/api/messages/<course_code>', methods=['GET'])
