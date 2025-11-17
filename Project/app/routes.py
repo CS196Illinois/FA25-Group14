@@ -14,7 +14,6 @@ from google.genai import types
 import os
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
-from pip._vendor import cachecontrol
 import requests
 
 from app.models import db, User, Review, UserRequirements, Message
