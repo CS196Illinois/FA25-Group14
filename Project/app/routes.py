@@ -7,11 +7,15 @@ from pathlib import Path
 from typing import Dict, List
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash
+from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from google import genai
 from google.genai import types
 import os
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from pip._vendor import cachecontrol
+import requests
 
 from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
@@ -24,6 +28,54 @@ bp = Blueprint('main', __name__)
 
 DATA_PATH = Path(__file__).resolve().parent / 'all_courses.csv'
 _GENED_SPLIT = re.compile(r'[;,]')
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_DISCOVERY_URL = os.environ.get(
+    "GOOGLE_DISCOVERY_URL",
+    "https://accounts.google.com/.well-known/openid-configuration"
+)
+
+
+def get_google_provider_cfg():
+    """Get Google's OAuth 2.0 provider configuration."""
+    return requests.get(GOOGLE_DISCOVERY_URL).json()
+
+
+def get_or_create_user_from_google(user_info):
+    """
+    Get or create a user from Google OAuth profile.
+    Only allows @illinois.edu email addresses.
+    Returns (user, error_message) tuple.
+    """
+    email = user_info.get("email")
+    name = user_info.get("name")
+
+    # Verify Illinois email
+    if not email or not email.endswith("@illinois.edu"):
+        return None, "Only @illinois.edu email addresses are allowed to register."
+
+    # Check if user exists
+    user = User.query.filter_by(email=email.lower()).first()
+
+    if user:
+        return user, None
+
+    # Extract netid from email
+    netid = email.split("@")[0]
+
+    # Create new user (no password needed for OAuth users)
+    user = User(
+        email=email.lower(),
+        name=name or netid,
+        username=netid,  # Set username as netid by default
+        password_hash=""  # OAuth users don't need password initially
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    return user, None
 
 
 CourseRecord = Dict[str, str]
@@ -271,6 +323,104 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('main.index'))
 
+
+# Google OAuth routes
+@bp.route('/login/google')
+def google_login():
+    """Initiate Google OAuth login flow."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
+    # Get Google's authorization endpoint
+    google_provider_cfg = get_google_provider_cfg()
+    authorization_endpoint = google_provider_cfg["authorization_endpoint"]
+
+    # Construct the OAuth request URI
+    request_uri = (
+        f"{authorization_endpoint}?"
+        f"response_type=code&"
+        f"client_id={GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={request.url_root}login/google/callback&"
+        f"scope=openid email profile&"
+        f"access_type=offline&"
+        f"prompt=select_account"
+    )
+
+    return redirect(request_uri)
+
+
+@bp.route('/login/google/callback')
+def google_callback():
+    """Handle Google OAuth callback."""
+    # Get authorization code from Google
+    code = request.args.get("code")
+
+    if not code:
+        flash('Authentication failed. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Get Google's token endpoint
+    google_provider_cfg = get_google_provider_cfg()
+    token_endpoint = google_provider_cfg["token_endpoint"]
+
+    # Exchange authorization code for tokens
+    token_url = token_endpoint
+    token_data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": request.url_root + "login/google/callback",
+        "grant_type": "authorization_code",
+    }
+
+    token_response = requests.post(token_url, data=token_data)
+
+    if token_response.status_code != 200:
+        flash('Failed to authenticate with Google. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    tokens = token_response.json()
+    id_token_jwt = tokens.get("id_token")
+
+    # Verify and decode the ID token
+    try:
+        user_info = id_token.verify_oauth2_token(
+            id_token_jwt,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+    except ValueError:
+        flash('Invalid authentication token. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Verify email is verified by Google
+    if not user_info.get("email_verified"):
+        flash('Your email is not verified by Google. Please verify your email first.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Get or create user (only allows @illinois.edu emails)
+    user, error = get_or_create_user_from_google(user_info)
+
+    if error:
+        flash(error, 'error')
+        return redirect(url_for('main.login'))
+
+    # Log the user in
+    login_user(user, remember=True)
+
+    # Check if this is a new user
+    if user.created_at and (datetime.utcnow() - user.created_at).total_seconds() < 10:
+        flash('Welcome to Course Compass! Your account has been created.', 'success')
+    else:
+        flash('Welcome back!', 'success')
+
+    next_page = request.args.get('next')
+    if not next_page or not next_page.startswith('/'):
+        next_page = url_for('main.index')
+
+    return redirect(next_page)
+
+
 # Review routes
 @bp.route('/course/<course_code>/review', methods=['GET', 'POST'])
 @login_required
@@ -517,22 +667,32 @@ def hello():
 @bp.route('/dashboard')
 @login_required
 def dashboard():
-    from app.forms import PasswordUpdateForm, AuditUploadForm
-    
+    from app.forms import PasswordUpdateForm, SetPasswordForm, UsernameUpdateForm, AuditUploadForm, DeleteAccountForm
+
     # Get or create user requirements
     requirements = UserRequirements.query.filter_by(user_id=current_user.id).first()
     if not requirements:
         requirements = UserRequirements(user_id=current_user.id)
         db.session.add(requirements)
         db.session.commit()
-    
-    password_form = PasswordUpdateForm()
+
+    # Choose appropriate password form based on whether user has password
+    if current_user.has_password:
+        password_form = PasswordUpdateForm()
+    else:
+        password_form = SetPasswordForm()
+
+    username_form = UsernameUpdateForm(username=current_user.username or current_user.netid)
     audit_form = AuditUploadForm()
-    
-    return render_template('dashboard/dashboard.html', 
+    delete_form = DeleteAccountForm()
+
+    return render_template('dashboard/dashboard.html',
                          requirements=requirements,
                          password_form=password_form,
-                         audit_form=audit_form)
+                         username_form=username_form,
+                         audit_form=audit_form,
+                         delete_form=delete_form,
+                         has_password=current_user.has_password)
 
 @bp.route('/upload_audit', methods=['POST'])
 @login_required
@@ -569,15 +729,61 @@ def upload_audit():
     
     return redirect(url_for('main.dashboard'))
 
+@bp.route('/update_username', methods=['POST'])
+@login_required
+def update_username():
+    """Update user's username"""
+    from app.forms import UsernameUpdateForm
+
+    form = UsernameUpdateForm()
+
+    if form.validate_on_submit():
+        new_username = form.username.data.strip()
+
+        # Update username
+        current_user.username = new_username
+        db.session.commit()
+        flash('Your username has been updated successfully!', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{error}', 'error')
+
+    return redirect(url_for('main.dashboard'))
+
+
+@bp.route('/set_password', methods=['POST'])
+@login_required
+def set_password():
+    """Set password for OAuth users who don't have one yet"""
+    from app.forms import SetPasswordForm
+
+    form = SetPasswordForm()
+
+    if form.validate_on_submit():
+        # Set password
+        current_user.password_hash = generate_password_hash(form.new_password.data)
+        db.session.commit()
+        flash('Your password has been set successfully! You can now login with your username and password.', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{error}', 'error')
+
+    return redirect(url_for('main.dashboard'))
+
+
 @bp.route('/update_password', methods=['POST'])
 @login_required
 def update_password():
+    """Change password for users who already have one"""
     from app.forms import PasswordUpdateForm
-    
+
     form = PasswordUpdateForm()
+
     if form.validate_on_submit():
         # Verify current password
-        if check_password_hash(current_user.password_hash, form.current_password.data):
+        if current_user.has_password and check_password_hash(current_user.password_hash, form.current_password.data):
             # Update password
             current_user.password_hash = generate_password_hash(form.new_password.data)
             db.session.commit()
@@ -587,29 +793,46 @@ def update_password():
     else:
         for field, errors in form.errors.items():
             for error in errors:
-                flash(f'{getattr(form, field).label.text}: {error}', 'error')
-    
+                flash(f'{error}', 'error')
+
     return redirect(url_for('main.dashboard'))
 
-@bp.route('/change_password', methods=['GET', 'POST'])
+
+@bp.route('/delete_account', methods=['POST'])
 @login_required
-def change_password():
-    from app.forms import PasswordUpdateForm
-    
-    form = PasswordUpdateForm()
-    
-    if form.validate_on_submit():
-        # Verify current password
-        if check_password_hash(current_user.password_hash, form.current_password.data):
-            # Update password
-            current_user.password_hash = generate_password_hash(form.new_password.data)
+def delete_account():
+    """Delete user account and all associated data"""
+    try:
+        user_id = current_user.id
+
+        # Delete all user's reviews
+        Review.query.filter_by(user_id=user_id).delete()
+
+        # Delete all user's messages
+        Message.query.filter_by(user_id=user_id).delete()
+
+        # Delete user requirements
+        UserRequirements.query.filter_by(user_id=user_id).delete()
+
+        # Log out user before deleting account
+        logout_user()
+
+        # Delete the user account
+        user = User.query.get(user_id)
+        if user:
+            db.session.delete(user)
             db.session.commit()
-            flash('Your password has been updated successfully!', 'success')
-            return redirect(url_for('main.dashboard'))
+            flash('Your account has been permanently deleted. We\'re sad to see you go!', 'info')
         else:
-            flash('Current password is incorrect', 'error')
-    
-    return render_template('auth/change_password.html', form=form)
+            flash('Account deletion failed. Please try again.', 'error')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting your account: {str(e)}', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    return redirect(url_for('main.index'))
+
 
 # Messaging routes
 @bp.route('/api/messages/<course_code>', methods=['GET'])

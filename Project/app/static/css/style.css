@@ -1561,6 +1561,84 @@ fieldset.form-row legend {
   color: var(--text-muted);
 }
 
+/* OAuth Section */
+.oauth-section {
+  margin-bottom: 1.5rem;
+}
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  color: #444;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-google:hover {
+  background: #f8f9fa;
+  border-color: #ccc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-google svg {
+  flex-shrink: 0;
+}
+
+.oauth-help {
+  display: block;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+/* Info Note */
+.info-note {
+  background: rgba(255, 85, 46, 0.05);
+  border-left: 3px solid var(--primary);
+  padding: 1rem;
+  margin: 1.5rem 0;
+  border-radius: 8px;
+}
+
+.info-note p {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 1.5rem 0;
+  color: var(--text-muted);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.divider span {
+  padding: 0 1rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

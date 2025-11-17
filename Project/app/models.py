@@ -9,10 +9,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
+    username = db.Column(db.String(100))  # Custom username, defaults to netid
     password_hash = db.Column(db.String(128))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
-    
+
     # Relationship to reviews
     reviews = db.relationship('Review', backref='author', lazy=True, cascade='all, delete-orphan')
     
@@ -21,10 +22,22 @@ class User(UserMixin, db.Model):
     
     def __repr__(self):
         return f'<User {self.email}>'
-    
+
     @property
     def is_illinois_email(self):
         return self.email.endswith('@illinois.edu')
+
+    @property
+    def netid(self):
+        """Extract NetID from Illinois email (part before @illinois.edu)"""
+        if self.email and '@' in self.email:
+            return self.email.split('@')[0]
+        return None
+
+    @property
+    def has_password(self):
+        """Check if user has set a password (for OAuth users who haven't set one yet)"""
+        return self.password_hash and self.password_hash != ""
     
 class UserRequirements(db.Model):
     id = db.Column(db.Integer, primary_key=True)
