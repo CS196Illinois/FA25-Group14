@@ -7,11 +7,14 @@ from pathlib import Path
 from typing import Dict, List
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash
+from flask import Blueprint, json, jsonify, render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 import google.generativeai as genai
-from google.genai import types
 import os
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from pip._vendor import cachecontrol
+import requests
 
 from app.models import db, User, Review, UserRequirements
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
@@ -22,6 +25,50 @@ bp = Blueprint('main', __name__)
 
 DATA_PATH = Path(__file__).resolve().parent / 'all_courses.csv'
 _GENED_SPLIT = re.compile(r'[;,]')
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_DISCOVERY_URL = os.environ.get(
+    "GOOGLE_DISCOVERY_URL",
+    "https://accounts.google.com/.well-known/openid-configuration"
+)
+
+
+def get_google_provider_cfg():
+    """Get Google's OAuth 2.0 provider configuration."""
+    return requests.get(GOOGLE_DISCOVERY_URL).json()
+
+
+def get_or_create_user_from_google(user_info):
+    """
+    Get or create a user from Google OAuth profile.
+    Only allows @illinois.edu email addresses.
+    Returns (user, error_message) tuple.
+    """
+    email = user_info.get("email")
+    name = user_info.get("name")
+
+    # Verify Illinois email
+    if not email or not email.endswith("@illinois.edu"):
+        return None, "Only @illinois.edu email addresses are allowed to register."
+
+    # Check if user exists
+    user = User.query.filter_by(email=email.lower()).first()
+
+    if user:
+        return user, None
+
+    # Create new user (no password needed for OAuth users)
+    user = User(
+        email=email.lower(),
+        name=name or email.split("@")[0],
+        password_hash=""  # OAuth users don't need password
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    return user, None
 
 
 CourseRecord = Dict[str, str]
@@ -262,6 +309,104 @@ def logout():
     logout_user()
     flash('You have been logged out', 'info')
     return redirect(url_for('main.index'))
+
+
+# Google OAuth routes
+@bp.route('/login/google')
+def google_login():
+    """Initiate Google OAuth login flow."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+
+    # Get Google's authorization endpoint
+    google_provider_cfg = get_google_provider_cfg()
+    authorization_endpoint = google_provider_cfg["authorization_endpoint"]
+
+    # Construct the OAuth request URI
+    request_uri = (
+        f"{authorization_endpoint}?"
+        f"response_type=code&"
+        f"client_id={GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={request.url_root}login/google/callback&"
+        f"scope=openid email profile&"
+        f"access_type=offline&"
+        f"prompt=select_account"
+    )
+
+    return redirect(request_uri)
+
+
+@bp.route('/login/google/callback')
+def google_callback():
+    """Handle Google OAuth callback."""
+    # Get authorization code from Google
+    code = request.args.get("code")
+
+    if not code:
+        flash('Authentication failed. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Get Google's token endpoint
+    google_provider_cfg = get_google_provider_cfg()
+    token_endpoint = google_provider_cfg["token_endpoint"]
+
+    # Exchange authorization code for tokens
+    token_url = token_endpoint
+    token_data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": request.url_root + "login/google/callback",
+        "grant_type": "authorization_code",
+    }
+
+    token_response = requests.post(token_url, data=token_data)
+
+    if token_response.status_code != 200:
+        flash('Failed to authenticate with Google. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    tokens = token_response.json()
+    id_token_jwt = tokens.get("id_token")
+
+    # Verify and decode the ID token
+    try:
+        user_info = id_token.verify_oauth2_token(
+            id_token_jwt,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+    except ValueError:
+        flash('Invalid authentication token. Please try again.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Verify email is verified by Google
+    if not user_info.get("email_verified"):
+        flash('Your email is not verified by Google. Please verify your email first.', 'error')
+        return redirect(url_for('main.login'))
+
+    # Get or create user (only allows @illinois.edu emails)
+    user, error = get_or_create_user_from_google(user_info)
+
+    if error:
+        flash(error, 'error')
+        return redirect(url_for('main.login'))
+
+    # Log the user in
+    login_user(user, remember=True)
+
+    # Check if this is a new user
+    if user.created_at and (datetime.utcnow() - user.created_at).total_seconds() < 10:
+        flash('Welcome to Course Compass! Your account has been created.', 'success')
+    else:
+        flash('Welcome back!', 'success')
+
+    next_page = request.args.get('next')
+    if not next_page or not next_page.startswith('/'):
+        next_page = url_for('main.index')
+
+    return redirect(next_page)
+
 
 # Review routes
 @bp.route('/course/<course_code>/review', methods=['GET', 'POST'])
