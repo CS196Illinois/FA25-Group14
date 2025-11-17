@@ -203,6 +203,26 @@ def api_courses():
         }
     )
 
+# Health check endpoint for Render and monitoring services
+@bp.route('/health')
+def health_check():
+    """Simple health check endpoint for monitoring."""
+    try:
+        # Test database connection
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({
+            'status': 'healthy',
+            'service': 'Course Compass',
+            'database': 'connected'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'service': 'Course Compass',
+            'database': 'disconnected',
+            'error': str(e)
+        }), 503
+
 @bp.route('/')
 def index():
     return render_template('index.html')

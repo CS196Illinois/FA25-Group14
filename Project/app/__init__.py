@@ -20,15 +20,27 @@ def create_app():
             print("WARNING: Using auto-generated secret key. Set SECRET_KEY environment variable!")
     
     app.config['SECRET_KEY'] = secret_key
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL') or 'sqlite:///course_compass.db'
+    
+    # Database configuration
+    database_url = os.environ.get('DATABASE_URL') or 'sqlite:///course_compass.db'
+    # Fix for Render/Heroku postgres:// URL
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     
     # Additional security configurations
+    is_production = os.environ.get('FLASK_ENV') == 'production'
     app.config['WTF_CSRF_ENABLED'] = True
     app.config['WTF_CSRF_TIME_LIMIT'] = None  # No time limit for CSRF tokens
-    app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') != 'development'
+    app.config['SESSION_COOKIE_SECURE'] = is_production
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['PREFERRED_URL_SCHEME'] = 'https' if is_production else 'http'
     
     # Initialize extensions
     db.init_app(app)

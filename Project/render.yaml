@@ -1,0 +1,46 @@
+services:
+  # Web Service
+  - type: web
+    name: course-compass
+    env: python
+    region: oregon
+    plan: free
+    branch: master
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -c gunicorn_config.py run:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: False
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: course-compass-db
+          property: connectionString
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+  # PostgreSQL Database (optional - if not using Supabase)
+  # Uncomment if you want Render-managed PostgreSQL instead of Supabase
+  # - type: pserv
+  #   name: course-compass-db
+  #   env: docker
+  #   plan: free
+  #   region: oregon
+  #   branch: master
+  #   disk:
+  #     name: course-compass-data
+  #     mountPath: /var/lib/postgresql/data
+  #     sizeGB: 1
+
+# Notes:
+# 1. Set SUPABASE_URL and SUPABASE_KEY in Render dashboard manually
+# 2. For production, upgrade from free tier for better performance
+# 3. Add custom domain in Render dashboard settings
+# 4. Enable auto-deploy for automatic deployments on git push
