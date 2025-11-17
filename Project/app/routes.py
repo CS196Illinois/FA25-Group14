@@ -20,6 +20,7 @@ import requests
 from app.models import db, User, Review, UserRequirements, Message
 from app.forms import LoginForm, RegisterForm, ReviewForm, EditReviewForm
 from app.utils.gpa_calculator import get_course_gpa_stats
+from app import super as sb
 
 from datetime import datetime
 

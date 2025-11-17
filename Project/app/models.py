@@ -16,10 +16,10 @@ class User(UserMixin, db.Model):
 
     # Relationship to reviews
     reviews = db.relationship('Review', backref='author', lazy=True, cascade='all, delete-orphan')
-
+    
     # Relationship to messages
     messages = db.relationship('Message', backref='author', lazy=True, cascade='all, delete-orphan')
-
+    
     def __repr__(self):
         return f'<User {self.email}>'
 
