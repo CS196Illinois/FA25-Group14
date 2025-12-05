@@ -375,6 +375,10 @@ def google_callback():
     token_response = requests.post(token_url, data=token_data)
 
     if token_response.status_code != 200:
+        # Debug: Log the actual error from Google
+        print(f"Google OAuth Error - Status: {token_response.status_code}")
+        print(f"Google OAuth Error - Response: {token_response.text}")
+        print(f"Redirect URI used: {request.url_root}login/google/callback")
         flash('Failed to authenticate with Google. Please try again.', 'error')
         return redirect(url_for('main.login'))
 
