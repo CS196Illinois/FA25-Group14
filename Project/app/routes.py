@@ -685,7 +685,7 @@ def dashboard():
     else:
         password_form = SetPasswordForm()
 
-    username_form = UsernameUpdateForm(username=current_user.username or current_user.netid)
+    username_form = UsernameUpdateForm(username=current_user.email or current_user.netid)
     audit_form = AuditUploadForm()
     delete_form = DeleteAccountForm()
 
@@ -744,7 +744,7 @@ def update_username():
         new_username = form.username.data.strip()
 
         # Update username
-        current_user.username = new_username
+        current_user.email = new_username
         db.session.commit()
         flash('Your username has been updated successfully!', 'success')
     else:
