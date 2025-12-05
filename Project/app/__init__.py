@@ -13,7 +13,7 @@ def create_app():
     secret_key = os.environ.get('SECRET_KEY')
     if not secret_key:
         if os.environ.get('FLASK_ENV') == 'development':
-            secret_key = 'dev-secret-key-change-in-production'
+            secret_key = os.environ.get("SECRET_KEY")
         else:
             # Generate a random key for production if not set (not recommended, set it properly!)
             secret_key = secrets.token_hex(32)
